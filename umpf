@@ -332,7 +332,7 @@ undo_persistent() {
 ### helper ###
 
 nice_branch() {
-	reply=( $(sed -r -n 's,^(remotes/([^/]*)/|heads/)?(.*),\3 \2,p' <<< "${1}") )
+	read -r -a reply < <(sed -r -n 's,^(remotes/([^/]*)/|heads/)?(.*),\3 \2,p' <<< "${1}")
 }
 
 find_branch_rev() {
@@ -344,7 +344,8 @@ find_branch_rev() {
 		return
 	fi
 	remote="${GIT_REMOTE}"
-	branches=( $(${GIT} show-ref | sed -n -r "s:[^ ]* refs/((heads|remotes/[^ ]*)/${name})\$:\1:p" | sort -r) )
+	mapfile -t branches < <(${GIT} show-ref | sed -n -r "s:[^ ]* refs/((heads|remotes/[^ ]*)/${name})\$:\1:p" | sort -r)
+
 	while [ -z "${GIT_REMOTE}" ] || ! reply="$(${GIT} rev-parse "${remote}${name}^{}" 2> /dev/null)"; do
 		if [ "${#branches[@]}" -eq 0 ]; then
 			break
@@ -414,10 +415,10 @@ find_branch_name() {
 		return
 	fi
 	if [ -n "${GIT_REMOTE}" ]; then
-		branches=( $(list_branch_names "${merge}" "remotes/${GIT_REMOTE}") )
+		mapfile -t branches < <(list_branch_names "${merge}" "remotes/${GIT_REMOTE}")
 	fi
 	if [ ${#branches[@]} -ne 1 ]; then
-		branches=( $(list_branch_names "${merge}") )
+		mapfile -t branches < <(list_branch_names "${merge}")
 	fi
 	case "${#branches[@]}" in
 	0)
@@ -485,7 +486,8 @@ topic_from_rev() {
 		rev="$(${GIT} describe --all "${1}")"
 		rev="$(${GIT} rev-parse --symbolic-full-name "${rev}")"
 	fi
-	local -a remotes=( $(${GIT} remote) )
+	local -a remotes
+	mapfile -t remotes < <(${GIT} remote)
 	remotes=( "${remotes[@]/#/refs\/remotes\/}" "refs/heads" )
 	local pattern="${remotes[*]}"
 	pattern="^(${pattern// /|})/"
@@ -567,12 +569,12 @@ import_series() {
 		fi
 	fi
 	echo "# umpf-name: ${NAME}" >> "${series}"
-	merges=( $(${GIT} rev-list --merges --reverse --topo-order --parents "${BASE}...${import}" | {
+	mapfile -t merges < <(${GIT} rev-list --merges --reverse --topo-order --parents "${BASE}...${import}" | {
 		while read head base merges; do
 			for merge in ${merges}; do
 				echo "${head}:${merge}"
 			done
-		done } ) )
+		done } )
 	names="#"
 	for merge in "${merges[@]}"; do
 		local squash=
@@ -1376,11 +1378,12 @@ diff_hashinfo() {
 diff_end() {
 	local head
 	local -a branches branch_names
-	branches=( $(<"${STATE}/topics") )
+	mapfile -t branches < "${STATE}/topics"
 	if [ -e "${STATE}/flat" ]; then
 		branches[${#branches[@]}]="$(<"${STATE}/flat")"
 	fi
-	branch_names=( $(<"${STATE}/topic-names") )
+	mapfile -t branch_names < "${STATE}/topic-names"
+
 	head="$(<"${STATE}/head")"
 
 	show_diff "${head}" "$(<"${STATE}/base")"
@@ -1533,7 +1536,7 @@ update_topics() {
 	info
 	info "Updating ${target} topic branches for '${GIT_REMOTE}'..."
 	read -p "Press Enter to continue."
-	topics=( $(${GIT} show-ref | sed -r -n 's,.* refs/umpf/(.*),\1,p') )
+	mapfile -t topics < <(${GIT} show-ref | sed -r -n 's,.* refs/umpf/(.*),\1,p')
 	for topic in "${topics[@]}"; do
 		update_${target}_topic "${topic}"
 	done
@@ -1541,9 +1544,9 @@ update_topics() {
 
 run_distribute(){
 	local -a branches branch_names
-	branches=( $(<"${STATE}/topics") )
+	mapfile -t branches < "${STATE}/topics"
 	if ! ${IDENTICAL}; then
-		branch_names=( $(<"${STATE}/topic-names") )
+		mapfile -t branch_names < "${STATE}/topic-names"
 	fi
 
 	exec {patches_in}< "${STATE}/diff"
