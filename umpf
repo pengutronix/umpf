@@ -387,7 +387,7 @@ find_branch_rev() {
 		fi
 		if [ "$(${GIT} merge-base "${reply}" "${branch}")" == "${reply}" ]; then
 			info "Warning: The following commits are in '${branch}' but not in '${remote}${name}':"
-			GIT_PAGER= ${GIT} log --oneline "${reply}...${b}"
+			GIT_PAGER="" ${GIT} log --oneline "${reply}...${b}"
 			if tty -s; then
 				read -p "Press Enter to continue."
 			fi
@@ -1414,7 +1414,7 @@ apply_to_topic() {
 	state=$(cat "${STATE}/distribute-state" 2>/dev/null)
 
 	echo
-	GIT_PAGER= ${GIT} log --oneline -1 "${rev}"
+	GIT_PAGER="" ${GIT} log --oneline -1 "${rev}"
 
 	while [ -z "${topic}" ]; do
 		local i=0 ret
