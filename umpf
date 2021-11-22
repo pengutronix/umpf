@@ -113,7 +113,7 @@ abort() {
 		info "$*"
 	fi
 
-	if [ -d "${GIT_DIR}/rebase-apply" -o -d "${GIT_DIR}/rebase-merge" ]; then
+	if [[ -d "${GIT_DIR}/rebase-apply" || -d "${GIT_DIR}/rebase-merge" ]]; then
 		${GIT} rebase --abort
 	fi
 	if [ -f "${GIT_DIR}/CHERRY_PICK_HEAD" ]; then
@@ -215,7 +215,7 @@ setup() {
 		shift
 		case "${OPT}" in
 		--auto-rerere)
-			if [ "$(${GIT} config --get rerere.enabled)" = "true" -o -d "$(${GIT} rev-parse --git-common-dir)/rr-cache" ]; then
+			if [[ "$(${GIT} config --get rerere.enabled)" = "true" || -d "$(${GIT} rev-parse --git-common-dir)/rr-cache" ]]; then
 				AUTO_RERERE=true
 			else
 				bailout "--auto-rerere is given, but rerere is not enabled in current repo."
@@ -913,7 +913,7 @@ rebase_branch() {
 	local name="${1}"
 	local hash="${2}"
 	if ${has_failed}; then
-		if [ -d "${GIT_DIR}/rebase-apply" -o -d "${GIT_DIR}/rebase-merge" ]; then
+		if [[ -d "${GIT_DIR}/rebase-apply" || -d "${GIT_DIR}/rebase-merge" ]]; then
 			${GIT} rebase --continue || bailout "'rebase --continue' failed"
 		fi
 	else
@@ -1349,7 +1349,7 @@ do_build() {
 
 do_merge() {
 	local branch
-	if [ $# -lt 1 -o $# -gt 2 ]; then
+	if [[ $# -lt 1 || $# -gt 2 ]]; then
 		abort "usage: umpf merge <commit-ish> [<name>]"
 	fi
 	prepare
