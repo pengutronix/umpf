@@ -502,11 +502,11 @@ import_series() {
 
 	for base_rev in $(${GIT} rev-parse ${import}) $(${GIT} rev-list --merges -1 "${import}"); do
 		${GIT} log -1 "${base_rev}" | sed -n '/^    # umpf-base/,/^    # umpf-end/p' > "${series}"
-		if [ $(wc -l < "${series}") -gt 2 ]; then
+		if [ "$(wc -l < "${series}")" -gt 2 ]; then
 			break
 		fi
 	done
-	if [ $(wc -l < "${series}") -gt 2 ]; then
+	if [ "$(wc -l < "${series}")" -gt 2 ]; then
 		info "Using series from commit message..."
 		${GIT} log -1 --format='%b' "${base_rev}" | sed '$d' > "${series}"
 		if ${STABLE}; then
@@ -922,7 +922,7 @@ rebase_branch() {
 		local reply topicrev base args
 		find_branch_rev "${name}" "${hash}"
 		topicrev="${reply}"
-		base="$(${GIT} rev-list -n1 --merges ${topicrev} ^$(cat ${STATE}/base))"
+		base="$(${GIT} rev-list -n1 --merges ${topicrev} "^$(cat ${STATE}/base)")"
 		if [ -n "${base}" ]; then
 			if ${GIT} log -1 "${base}" | grep -q '^    umpf-merge-topic:'; then
 				: # stop at the umpf merge
@@ -933,7 +933,9 @@ rebase_branch() {
 			fi
 		fi
 		if [ -z "${base}" ]; then
-			base="$(${GIT} merge-base ${topicrev} $(cat ${STATE}/base ${STATE}/topics 2>/dev/null))"
+			local -a topics
+			mapfile -t topics < <(cat ${STATE}/topics 2>/dev/null)
+			base="$(${GIT} merge-base ${topicrev} "$(cat ${STATE}/base 2>/dev/null)" "${topics[@]}")"
 		fi
 		echo "${topicrev}" >> "${STATE}/topics"
 
@@ -956,7 +958,7 @@ rebase_branch() {
 	fi
 	if [ "${squash}" = 1 ]; then
 		local commit1 tree next
-		commit1="$(git rev-list $(<"${STATE}/prev_head")..  | tail -n1)"
+		commit1="$(git rev-list "$(<"${STATE}/prev_head").."  | tail -n1)"
 		tree="$(${GIT} log -1 --format="%T")"
 		next="$(${GIT} commit-tree "${tree}" -p "$(<"${STATE}/prev_head")" -m "tmp")" &&
 		${GIT} checkout -q "${next}" &&
