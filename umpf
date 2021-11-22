@@ -608,7 +608,7 @@ import_series() {
 }
 
 merge() {
-	local rev topic into msg squash_topic
+	local rev topic into squash_topic
 	rev="${1}"
 	topic="${2}"
 	if [ -z "${topic}" ]; then
@@ -1307,7 +1307,7 @@ build_branch() {
 			fi
 		fi
 	else
-		local reply msg
+		local reply
 		find_branch_rev "${name}" "${hash}"
 		if ! merge "${reply}" "${name}"; then
 			bailout "Merging '${name}' failed!"
