@@ -332,12 +332,12 @@ undo_persistent() {
 ### helper ###
 
 nice_branch() {
-	read -r -a reply < <(sed -r -n 's,^(remotes/([^/]*)/|heads/)?(.*),\3 \2,p' <<< "${1}")
+	read -r -a replies < <(sed -r -n 's,^(remotes/([^/]*)/|heads/)?(.*),\3 \2,p' <<< "${1}")
 }
 
 find_branch_rev() {
 	local name branch remote
-	local -a branches
+	local -a branches replies
 	name="${1}"
 	if ${IDENTICAL}; then
 		reply="${2}"
@@ -358,15 +358,15 @@ find_branch_rev() {
 		local i=0 def=0
 		for branch in "${branches[@]}"; do
 			nice_branch "${branch}"
-			echo "${i}) ${reply[1]:+${reply[1]}/}${reply[0]}"
-			if [ "${GIT_FALLBACK_REMOTE}" == "${reply[1]}/" ]; then
+			echo "${i}) ${replies[1]:+${replies[1]}/}${replies[0]}"
+			if [ "${GIT_FALLBACK_REMOTE}" == "${replies[1]}/" ]; then
 				def="${i}"
 			fi
 			i=$((i+1))
 		done
 		read -e -i ${def} -p "branch number: " i
 		nice_branch "${branches[$i]}"
-		remote="${reply[1]:-refs/heads}/"
+		remote="${replies[1]:-refs/heads}/"
 		if [ -z "${GIT_REMOTE}" ]; then
 			GIT_REMOTE="${remote}"
 			info "Using remote '${GIT_REMOTE}'."
@@ -403,7 +403,7 @@ list_branch_names() {
 
 find_branch_name() {
 	local head merge mergelog candidate
-	local -a branches reply
+	local -a branches replies
 	head="${1}"
 	merge="${2}"
 	mergelog=$(${GIT} log --oneline -1 "${head}")
@@ -428,23 +428,23 @@ find_branch_name() {
 		;;
 	1)
 		nice_branch "${branches[0]}"
-		name="${reply[0]}"
+		name="${replies[0]}"
 		;;
 	*)
 		info "Multiple branches found for $mergelog"
 		local i=0
 		for branch in "${branches[@]}"; do
 			nice_branch "${branch}"
-			echo "${i}) ${reply[1]:+[${reply[1]}]} ${reply[0]}"
+			echo "${i}) ${replies[1]:+[${replies[1]}]} ${replies[0]}"
 			i=$((i+1))
 		done
 		while [ -z "${name}" ]; do
 			read -e -p "branch number: " i
 			nice_branch "${branches[$i]}"
-			name="${reply[0]}"
+			name="${replies[0]}"
 		done
 		if [ -z "${GIT_REMOTE}" ]; then
-			GIT_REMOTE="${reply[1]:-refs/heads}/"
+			GIT_REMOTE="${replies[1]:-refs/heads}/"
 			info "Using remote '${GIT_REMOTE}'."
 		fi
 	esac
