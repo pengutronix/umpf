@@ -1585,6 +1585,7 @@ do_continue() {
 	prepare
 
 	test -f "${STATE}/command" || bailout "nothing to continue!"
+	# shellcheck source=/dev/null
 	. "${STATE}/config" || bailout "Failed to source '${STATE}/config'"
 
 	case "$(<"${STATE}/command")" in
