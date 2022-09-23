@@ -1,0 +1,1658 @@
+#! /bin/bash
+#
+# MIT License
+#
+# Copyright (c) 2022 Pengutronix
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+#
+# Universal Magic Patch Functionator
+
+GIT_RELATIVE=""
+GIT_REMOTE=""
+GIT_FALLBACK_REMOTE=""
+SERIES=""
+BASE=""
+NAME=""
+PATCH_DIR="umpf-patches"
+IDENTICAL=false
+STABLE=false
+FORCE=false
+UPDATE=false
+VERBOSE=false
+VERSION=-1
+AUTO_RERERE=false
+BLOCK_SIZE=100
+BB=false
+
+# Create a pristine environment to minimize unnecessary fuzz when different
+# users use umpf on the same patch stack. That is, don't load any config files,
+# and pin down environment variables which could influence git's behaviour or
+# patch output.
+PRISTINE_GIT_PARAMS=( -c gc.auto=0 -c core.abbrev=12 -c core.editor=:
+	-c sequence.editor=: )
+# Maybe we need to save name and e-mail from the user config…
+# Note from git-commit-tree(1): if set in the user's environment, GIT_AUTHOR_*
+# and GIT_COMMITTER_* still take precedence over the user.* config variables.
+PRISTINE_GIT_AUTHOR=$(git config --get user.name)
+PRISTINE_GIT_EMAIL=$(git config --get user.email)
+if [ -n "${PRISTINE_GIT_AUTHOR}" ]; then
+	PRISTINE_GIT_PARAMS+=( -c user.name="${PRISTINE_GIT_AUTHOR}" )
+fi
+if [ -n "${PRISTINE_GIT_EMAIL}" ]; then
+	PRISTINE_GIT_PARAMS+=( -c user.email="${PRISTINE_GIT_EMAIL}" )
+fi
+pristine_git() {
+	# Notes from the git(1) manpage:
+	# - GIT_DIFF_OPTS takes takes precedence over -U command line parameter
+	# - GIT_EDITOR takes precedence over core.editor config variable
+	HOME=/nonexistent \
+	XDG_CONFIG_HOME=/nonexistent \
+	GIT_CONFIG_NOSYSTEM=true \
+	GIT_DIFF_OPTS="-u3" \
+	GIT_EDITOR=: \
+	git "${PRISTINE_GIT_PARAMS[@]}" "$@"
+}
+GIT="pristine_git"
+GIT_DIR="${GIT_DIR:-$(${GIT} rev-parse --git-dir 2> /dev/null)}"
+GIT_DIR="${GIT_DIR:-.git}"
+STATE="${GIT_DIR}/umpf"
+
+info() {
+	if [ -z "$*" ]; then
+		echo >&2
+	else
+		echo "umpf: $*" >&2
+	fi
+}
+
+bailout() {
+	if [ -d "${STATE}" ]; then
+		echo "${line}"  > "${STATE}/failed"
+		cat <<- EOF > "${STATE}/config"
+		PATCH_DIR="${PATCH_DIR}"
+		GIT_REMOTE="${GIT_REMOTE}"
+		SERIES="${SERIES}"
+		IDENTICAL="${IDENTICAL}"
+		STABLE="${STABLE}"
+		UPDATE="${UPDATE}"
+		VERSION="${VERSION}"
+		EOF
+		if ${FORCE}; then
+			echo "FORCE=true" >> "${STATE}/config"
+		fi
+	fi
+
+	if [ -n "$*" ]; then
+		info "$*"
+		info
+	fi
+	info "Resolve issues and call 'umpf continue', or call 'umpf abort' to start over."
+
+	exit 1
+}
+
+abort() {
+	if [ -n "$*" ]; then
+		info "$*"
+	fi
+
+	if [ -d "${GIT_DIR}/rebase-apply" -o -d "${GIT_DIR}/rebase-merge" ]; then
+		${GIT} rebase --abort
+	fi
+	if [ -f "${GIT_DIR}/CHERRY_PICK_HEAD" ]; then
+		${GIT} cherry-pick --abort
+	fi
+	if [ -f "${GIT_DIR}/MERGE_HEAD" ]; then
+		${GIT} merge --abort
+	fi
+	undo_persistent
+	cleanup
+	exit 1
+}
+
+cleanup() {
+	if [ -n "${series_out}" ]; then
+		exec {series_out}<&-
+		unset series_out
+	fi
+	if [ -n "${series_in}" ]; then
+		exec {series_in}<&-
+		unset series_in
+	fi
+	rm -rf "${GIT_DIR}/refs/umpf"
+	rm -rf "${STATE}"
+}
+
+usage() {
+	cat <<- EOF
+	usage: $0 [<options>] [--] <command>
+
+	Mandatory arguments to long options are mandatory for short options too.
+	      --auto-rerere          automatically try to use rerere after conflicts
+	      --bb                   with format-patch: write patch series for bitbake
+	  -h, --help
+	  -f, --force
+	  -i, --identical            use exact commit hashes, not tip of branches
+	  -s, --stable               create a 'stable' tag from a branch based on an
+	                             existing tag. Implies '--identical'.
+	  -b, --base=<base>          specify/override base name [default: merge base]
+	  -n, --name=<name>          specify/override umpf name
+	  -p, --patchdir=<path>      with format-patch: write patches to <path>/
+	      --relative=<path>      create patches relative to <path>
+	  -r, --remote=<remote>      use <remote> to resolve branch names
+	  -u, --update               with --patchdir: update existing patches in <path>
+	  -v, --version=<version>    with tag: overwrite version number [default: 1]
+
+	Commands:
+	  diff <commit-ish>          show patches not in any topic branch (not
+	                             upstream) and patches missing locally
+	  show <commit-ish>          show an useries file from an umpf
+
+	  tag <commit-ish>           generate a utag from an umerge
+	  format-patch <utag>        generate a useries file and patch stack
+	                             from a utag
+
+	  merge <commit-ish> [<name>]merge one a topic branches into current
+	                             head, like git merge, but umpf compatible
+	                             Use <name> as topic name if specified.
+	                             Otherwise <commit-ish> must be the correct
+	                             topic name. The remote is removed if necessary
+	  build <umpf>               build an umerge from another umpf
+	  distribute <commit-ish>    push patches not yet in any topic branch
+	                             upstream
+
+	  continue                   continue a previously interrupted umpf command
+	  abort                      abort a previously started umpf command
+
+	  init <seriesfile>          manually create an umpf series file by
+	                             answering questions
+EOF
+}
+
+### setup ###
+
+setup() {
+	local tmp args o l
+	if tmp="$(git config umpf.patch-dir)"; then
+		PATCH_DIR="${tmp}"
+	fi
+	if tmp="$(git config umpf.block-size)"; then
+		BLOCK_SIZE="${tmp}"
+	fi
+	if tmp="$(git config umpf.remote)"; then
+		GIT_REMOTE="${tmp}"
+	fi
+	if tmp="$(git config umpf.fallback-remote)"; then
+		GIT_FALLBACK_REMOTE="${tmp}"
+	fi
+
+	o="fhisub:n:p:r:v:"
+	l="auto-rerere,bb,force,help,identical,stable,update,base:,name:,patchdir:,relative:,remote:,version:"
+	if ! args="$(getopt -n umpf -o "${o}" -l "${l}" -- "${@}")"; then
+		usage
+		exit 1
+	fi
+	eval set -- ${args}
+	while [ ${#} -gt 0 ]; do
+		OPT="${1}"
+		shift
+		case "${OPT}" in
+		--auto-rerere)
+			if [ "$(${GIT} config --get rerere.enabled)" = "true" -o -d "$(${GIT} rev-parse --git-common-dir)/rr-cache" ]; then
+				AUTO_RERERE=true
+			else
+				bailout "--auto-rerere is given, but rerere is not enabled in current repo."
+			fi
+			;;
+		--bb)
+			BB=true
+			;;
+		-f|--force)
+			FORCE=true
+			;;
+		-h|--help)
+			usage
+			exit
+			;;
+		-i|--identical)
+			IDENTICAL=true
+			;;
+		-s|--stable)
+			STABLE=true
+			IDENTICAL=true
+			;;
+		-u|--update)
+			UPDATE=true
+			;;
+		-b|--base)
+			BASE="${1}"
+			shift
+			;;
+		-n|--name)
+			NAME="${1}"
+			shift
+			;;
+		-p|--patchdir)
+			PATCH_DIR="${1}"
+			shift
+			;;
+		--relative)
+			GIT_RELATIVE="${1}"
+			shift
+			;;
+		-r|--remote)
+			GIT_REMOTE="${1}"
+			shift
+			;;
+		-v|--version)
+			VERSION="-${1}"
+			shift
+			;;
+		--)
+			break
+			;;
+		esac
+	done
+	COMMAND="${1}"
+	shift
+	ARGS=( "${@}" )
+
+	test -n "${PATCH_DIR}" || bailout "Patch directory not defined"
+	if [ "${PATCH_DIR}" == "${PATCH_DIR#/}" ]; then
+		PATCH_DIR="$PWD/${PATCH_DIR}"
+	fi
+	PATCH_DIR="${PATCH_DIR%/}"
+
+	if [ -n "${GIT_REMOTE}" ]; then
+		GIT_REMOTE="${GIT_REMOTE}/"
+	fi
+	if [ -n "${GIT_FALLBACK_REMOTE}" ]; then
+		GIT_FALLBACK_REMOTE="${GIT_FALLBACK_REMOTE}/"
+	fi
+}
+
+prepare() {
+	[ -d "${GIT_DIR}" ] || bailout "Not a git repository."
+
+	SERIES="${1:-HEAD}"
+}
+
+prepare_series() {
+	local s
+	if [ -f "${SERIES}" ]; then
+		cp "${SERIES}" "${STATE}/series"
+		return
+	fi
+	if ${GIT} rev-parse --verify -q "${SERIES}" > /dev/null; then
+		import_series "${SERIES}" &&
+		return
+	fi
+	if ! s="$(${GIT} tag | sort -r | grep -m1 "^${SERIES}/[0-9]\{8\}$")"; then
+		abort "Unknown file or revision '${SERIES}'"
+	fi
+	import_series "${s}"
+}
+
+prepare_persistent() {
+	prepare "${2}"
+
+	test -d "${STATE}" && bailout "umpf in progress!"
+
+	mkdir "${STATE}"
+	echo "${1}" > "${STATE}/command"
+	prepare_series
+	check_series
+	(${GIT} symbolic-ref -q --short HEAD || ${GIT} rev-parse HEAD) > "${STATE}/head-name"
+}
+
+undo_persistent() {
+	if test -e "${STATE}/head-name"; then
+		head_name=$(<"${STATE}/head-name")
+		${GIT} checkout -q "${head_name}"
+	fi
+}
+
+### helper ###
+
+nice_branch() {
+	reply=( $(sed -r -n 's,^(remotes/([^/]*)/|heads/)?(.*),\3 \2,p' <<< "${1}") )
+}
+
+find_branch_rev() {
+	local name branch remote
+	local -a branches
+	name="${1}"
+	if ${IDENTICAL}; then
+		reply="${2}"
+		return
+	fi
+	remote="${GIT_REMOTE}"
+	branches=( $(${GIT} show-ref | sed -n -r "s:[^ ]* refs/((heads|remotes/[^ ]*)/${name})\$:\1:p" | sort -r) )
+	while [ -z "${GIT_REMOTE}" ] || ! reply="$(${GIT} rev-parse "${remote}${name}^{}" 2> /dev/null)"; do
+		if [ "${#branches[@]}" -eq 0 ]; then
+			break
+		fi
+		if [ -z "${GIT_REMOTE}" ]; then
+			info "Remote undefined. Choose the branch with the correct remote:"
+		else
+			info "Branch not found for '${remote}'. Choose alternative branch:"
+		fi
+		local i=0 def=0
+		for branch in "${branches[@]}"; do
+			nice_branch "${branch}"
+			echo "${i}) ${reply[1]:+${reply[1]}/}${reply[0]}"
+			if [ "${GIT_FALLBACK_REMOTE}" == "${reply[1]}/" ]; then
+				def="${i}"
+			fi
+			i=$((i+1))
+		done
+		read -e -i ${def} -p "branch number: " i
+		nice_branch "${branches[$i]}"
+		remote="${reply[1]:-refs/heads}/"
+		if [ -z "${GIT_REMOTE}" ]; then
+			GIT_REMOTE="${remote}"
+			info "Using remote '${GIT_REMOTE}'."
+		fi
+	done
+	if [ -z "${reply}" ]; then
+		if [ "$(${GIT} rev-parse "${name}")" == "${name}" ]; then
+			reply="${name}"
+		fi
+	fi
+	if [ -z "${reply}" ]; then
+		bailout "Failed to find '${name}'"
+	fi
+	for branch in "${branches[@]}"; do
+		local b="$(${GIT} rev-parse --verify "${branch}^{}")"
+		if [ "${reply}" == "${b}" ]; then
+			continue
+		fi
+		if [ "$(${GIT} merge-base "${reply}" "${branch}")" == "${reply}" ]; then
+			info "Warning: The following commits are in '${branch}' but not in '${remote}${name}':"
+			GIT_PAGER= ${GIT} log --oneline "${reply}...${b}"
+			if tty -s; then
+				read -p "Press Enter to continue."
+			fi
+		fi
+	done
+}
+
+list_branch_names() {
+	rev="${1}"
+	filter="${2}"
+	${GIT} show-ref --head | sed -n -r -e "s:${rev} refs/(${filter}):\1:p"
+}
+
+find_branch_name() {
+	local head merge mergelog candidate
+	local -a branches reply
+	head="${1}"
+	merge="${2}"
+	mergelog=$(${GIT} log --oneline -1 "${head}")
+	name="$(${GIT} log -1 ${head} | sed -n -r 's,^    umpf-merge-topic: (.*)$,\1,p')"
+	if [ -n "${name}" ]; then
+		if ${GIT} log -1 ${head} | grep -q '^    umpf-squash-topic$' ; then
+			squash=1
+		fi
+		return
+	fi
+	if [ -n "${GIT_REMOTE}" ]; then
+		branches=( $(list_branch_names "${merge}" "remotes/${GIT_REMOTE}") )
+	fi
+	if [ ${#branches[@]} -ne 1 ]; then
+		branches=( $(list_branch_names "${merge}") )
+	fi
+	case "${#branches[@]}" in
+	0)
+		info "No branch found for ${mergelog}"
+		candidate=$(sed -n "s/^[0-9a-f]* Merge.* '\([^ ]*\)' .*/\1/p" <<< "${mergelog}")
+		read -e -i "${candidate}" -p "topic: " name
+		;;
+	1)
+		nice_branch "${branches[0]}"
+		name="${reply[0]}"
+		;;
+	*)
+		info "Multiple branches found for $mergelog"
+		local i=0
+		for branch in "${branches[@]}"; do
+			nice_branch "${branch}"
+			echo "${i}) ${reply[1]:+[${reply[1]}]} ${reply[0]}"
+			i=$((i+1))
+		done
+		while [ -z "${name}" ]; do
+			read -e -p "branch number: " i
+			nice_branch "${branches[$i]}"
+			name="${reply[0]}"
+		done
+		if [ -z "${GIT_REMOTE}" ]; then
+			GIT_REMOTE="${reply[1]:-refs/heads}/"
+			info "Using remote '${GIT_REMOTE}'."
+		fi
+	esac
+}
+
+#
+# needs ${branches[@]} and ${branch_names[@]}
+#
+show_diff() {
+	local head base i
+	local -a all
+	head="${1}"
+	base="${2}"
+
+	all=( "${head}" "^${base}" "${branches[@]/#/^}" )
+	if [ -n "$(${GIT} rev-list --no-merges "${all[@]}")" ]; then
+		info
+		info "These patches are not in any topics branch:"
+		${GIT} rev-list --no-merges --oneline "${all[@]}"
+		${GIT} rev-list --no-merges --reverse "${all[@]}" > "${STATE}/diff"
+		info
+	fi
+
+	for i in $(seq 0  $((${#branches[@]}-1))); do
+		all=( "^${head}" "^${base}" "${branches[i]}" )
+		if [ -n "$(${GIT} rev-list --no-merges "${all[@]}")" ]; then
+			info
+			info "These patches are in ${branch_names[i]} but not in '${head}':"
+			${GIT} rev-list --no-merges --oneline "${all[@]}"
+			info
+		fi
+	done
+}
+
+topic_from_rev() {
+	local rev="$(${GIT} rev-parse --symbolic-full-name "${1}")"
+	if [ -z "${rev}" ]; then
+		# not a branch name, so try to find one
+		rev="$(${GIT} describe --all "${1}")"
+		rev="$(${GIT} rev-parse --symbolic-full-name "${rev}")"
+	fi
+	local -a remotes=( $(${GIT} remote) )
+	remotes=( "${remotes[@]/#/refs\/remotes\/}" "refs/heads" )
+	local pattern="${remotes[*]}"
+	pattern="^(${pattern// /|})/"
+	sed -r "s,${pattern},," <<< "${rev}" || echo "${1}"
+}
+
+import_series() {
+	local series="${STATE}/series"
+	local import="${1}"
+	local names base_rev
+	local -A tmp_branches
+
+	for base_rev in $(${GIT} rev-parse ${import}) $(${GIT} rev-list --merges -1 "${import}"); do
+		${GIT} log -1 "${base_rev}" | sed -n '/^    # umpf-base/,/^    # umpf-end/p' > "${series}"
+		if [ $(wc -l < "${series}") -gt 2 ]; then
+			break
+		fi
+	done
+	if [ $(wc -l < "${series}") -gt 2 ]; then
+		info "Using series from commit message..."
+		${GIT} log -1 --format='%b' "${base_rev}" | sed '$d' > "${series}"
+		if ${STABLE}; then
+			local topic rev
+			rev="$(${GIT} rev-parse ${import})"
+			if ! topic="$(${GIT} symbolic-ref -q --short "${import}")"; then
+				topic="$(topic_from_rev "${import}")"
+			fi
+			s="# umpf-topic: ${topic}\n# umpf-hashinfo: ${rev}\n"
+			sed -i "s;^# umpf-end;${s}\0;" "${series}"
+		fi
+		${GIT} rev-parse "${base_rev}^" > "${STATE}/flat"
+		if ${VERBOSE}; then
+			info
+			cat "${series}"
+		fi
+		return
+	fi
+	info "Creating series from merges..."
+
+	local -a merges branches branch_names
+	local -A branch_squashes
+	local BASE NAME
+
+	base_rev="$(${GIT} merge-base "${base_rev}^1" "${base_rev}^2")"
+	exec {revlistfd}< <(${GIT} rev-list --merges --topo-order --parents "${base_rev}...${import}")
+	while read head base merges <&${revlistfd}; do
+		local magic base name
+		exec {localfd}< <(${GIT} notes show "${head}" 2>/dev/null)
+		while read magic base name <&${localfd}; do
+			if [ "${magic}" = "umpf-build-note:" ]; then
+				BASE="${BASE:-${base}}"
+				NAME="${NAME:-${name}}"
+				break
+			fi
+		done
+		exec {localfd}<&-
+		if [ -n "${BASE}" ]; then
+			break
+		fi
+	done
+	exec {revlistfd}<&-
+
+	if [ -z "${BASE}" ]; then
+		BASE="$(${GIT} describe "${base_rev}" 2>/dev/null)"
+		read -e -i "${BASE}" -p "base: " BASE
+	fi
+	echo "# umpf-base: ${BASE}" >> "${series}"
+	if [ -n "${GIT_RELATIVE}" ]; then
+		echo "# umpf-relative: ${GIT_RELATIVE}" >> "${series}"
+	fi
+	if [ -z "${NAME}" ]; then
+		if ! NAME="$(${GIT} symbolic-ref -q --short "${import}")"; then
+			if ${GIT} show-ref --tags --heads -q "${import}"; then
+				NAME="${import}"
+			fi
+		fi
+		NAME="${NAME##${GIT_REMOTE}}"
+		if [ -z "${NAME}" ]; then
+			read -e -p "name: " NAME
+		fi
+	fi
+	echo "# umpf-name: ${NAME}" >> "${series}"
+	merges=( $(${GIT} rev-list --merges --reverse --topo-order --parents "${BASE}...${import}" | {
+		while read head base merges; do
+			for merge in ${merges}; do
+				echo "${head}:${merge}"
+			done
+		done } ) )
+	names="#"
+	for merge in "${merges[@]}"; do
+		local squash=
+		head="${merge%:*}"
+		branch="${merge#*:}"
+		find_branch_name "${head}" "${branch}"
+		test -z "${name}" && continue
+		if ! grep -q "#${name}#" <<< "${names}"; then
+			branch_names[${#branch_names[@]}]="${name}"
+			branch_squashes[${name}]="${squash}"
+			names="${names}${name}#"
+		fi
+		tmp_branches[${name}]="${branch}"
+	done
+	for name in "${branch_names[@]}"; do
+		branch="${tmp_branches[${name}]}"
+		if [ "${branch_squashes[${name}]}" = 1 ]; then
+			echo "# umpf-squash-topic: ${name}" >> "${series}"
+		else
+			echo "# umpf-topic: ${name}" >> "${series}"
+		fi
+		echo "# umpf-hashinfo: ${branch}" >> "${series}"
+		branches[${#branches[@]}]="${branch}"
+	done
+	echo "# umpf-end" >> "${series}"
+	if ${VERBOSE}; then
+		info
+		cat "${series}"
+		show_diff "${import}" "${BASE}"
+	fi
+}
+
+merge() {
+	local rev topic into msg squash_topic
+	rev="${1}"
+	topic="${2}"
+	if [ -z "${topic}" ]; then
+		topic="$(topic_from_rev "${rev}")"
+	fi
+	if [ -z "${topic}" ]; then
+		info "Failed to derive topic name from '${rev}'"
+		if [ "${COMMAND}" = "merge" ]; then
+			info
+			info "Use 'umpf merge <commit-ish> <name>' to specify the topic name".
+			info
+		fi
+		return 1
+	fi
+	if [ -f "${STATE}/name" ]; then
+		into=" into $(<${STATE}/name)"
+	elif ! into=" into $(${GIT} symbolic-ref -q --short HEAD)"; then
+		into=""
+	fi
+	if [ "${squash}" = 1 ]; then
+		squash_topic="umpf-squash-topic"
+	fi
+	info "merging '${topic}'..."
+	${GIT} merge --no-ff -m "
+Merge '${topic}'${into}
+
+umpf-merge-topic: ${topic}
+${squash_topic}
+" "${rev}"
+	if [ $? -ne 0 ]; then
+		${AUTO_RERERE} &&
+		info "merge failed. Trying to continue with rerere solutions..." &&
+		test -z "$(${GIT} rerere remaining)" &&
+		info "Looks like rerere was successful." &&
+		${GIT} add -u &&
+		${GIT} commit
+	fi
+}
+
+### namespace: check ###
+
+verify_topic() {
+	if [ ! -e "${STATE}/check" ]; then
+		return
+	fi
+	if ${IDENTICAL} && ! grep -q hashinfo "${STATE}/check"; then
+		abort "Cannot run identical '$(<${STATE}/command)' without 'hashinfo' (${line})!"
+	fi
+	if [ "$(<${STATE}/command)" = "format_patch" ] && ! grep -q topic-range "${STATE}/check"; then
+		abort "Cannot run '$(<${STATE}/command)' without a 'topic-range' for each 'topic'!" \
+			"Maybe you need to 'tag' first?"
+	fi
+}
+
+check_topic() {
+	verify_topic
+	echo "topic" > "${STATE}/check"
+
+}
+
+check_release() {
+	verify_topic
+	echo "release" > "${STATE}/check"
+	# release has no hashinfo. Add it to satisfy verify_topic in check_end
+	echo "hashinfo" >> "${STATE}/check"
+}
+
+check_hashinfo() {
+	if [ ! -e "${STATE}/check" ] || grep -q hashinfo "${STATE}/check"; then
+		abort "'hashinfo' without 'topic'!"
+	fi
+	echo "hashinfo" >> "${STATE}/check"
+}
+
+check_topic_range() {
+	if [ ! -e "${STATE}/check" ] || grep -q topic-range "${STATE}/check"; then
+		abort "'topic-range' without 'topic'!"
+	fi
+	echo "topic-range" >> "${STATE}/check"
+}
+
+check_end() {
+	verify_topic
+	echo "end" > "${STATE}/check"
+}
+
+check_series() {
+	mv "${STATE}/series" "${STATE}/series.in"
+	parse_series check "${STATE}/series.in"
+	if [ ! -f "${STATE}/check" ]; then
+		abort "Empty series!"
+	fi
+	if ! grep -q end "${STATE}/check"; then
+		echo "# umpf-end" >> "${STATE}/done"
+	fi
+	# done contains the series with name/base fixups
+	cp "${STATE}/done" "${STATE}/series"
+	rm -f "${STATE}/check" "${STATE}/series.in"
+	# cleanup so parse_series can be run again
+	rm -f "${STATE}/name" "${STATE}/version" "${STATE}/tag" "${STATE}/base" "${STATE}/done"
+}
+
+### parse ###
+
+parse_setup() {
+	line="$1"
+
+	cmd="$(sed -n -r "s/# umpf-([a-z-]*)(:.*)?\$/\1/p" <<< "$line")"
+	content="$(sed -n -r "s/# umpf-[a-z-]*: *(.*)\$/\1/p" <<< "$line")"
+}
+
+do_exec() {
+	local func="${namespace}_${1}"
+	shift
+	if declare -F | grep " ${func}$" &>/dev/null; then
+		"${func}" "${@}"
+	fi
+}
+
+parse() {
+	local line cmd content
+
+	parse_setup "$@"
+
+	grep -q "^${line}$" "${STATE}/done" 2> /dev/null && return
+
+	if [ -e "${STATE}/base" ]; then
+		has_base=true
+	else
+		has_base=false
+	fi
+	if grep -q "^${line}$" "${STATE}/failed" 2>/dev/null; then
+		has_failed=true
+	else
+		has_failed=false
+	fi
+	case "$cmd" in
+	"")
+		do_exec other
+		;;
+	base)
+		local reply baserev
+		${has_base} && bailout "duplicate base line"
+		content="${BASE:-${content}}"
+		line="# umpf-base: ${content}"
+		test -n "${content}" || bailout "${cmd} line without value"
+		echo "${content}" > "${STATE}/base-name"
+		if ! baserev="$(${GIT} rev-parse --verify -q "refs/tags/${content}^{}" 2>/dev/null)"; then
+			find_branch_rev "${content}" || abort "invalid base: '${content}'"
+			baserev="${reply}"
+		fi
+		echo "${baserev}" > "${STATE}/base"
+
+		do_exec base
+
+		if [ -n "${GIT_RELATIVE}" ]; then
+			echo "${line}"  >> "${STATE}/done"
+			content="${GIT_RELATIVE}"
+			line="# umpf-relative: ${content}"
+			do_exec relative
+		fi
+		;;
+	relative)
+		${has_base} || bailout "${cmd} before base"
+		test -n "${content}" || bailout "${cmd} line without value"
+		if [ -z "${GIT_RELATIVE}" ]; then
+			GIT_RELATIVE="${content}"
+			do_exec relative
+		fi
+		;;
+	name)
+		${has_base} || bailout "${cmd} before base"
+		content="${NAME:-${content}}"
+		line="# umpf-name: ${content}"
+		test -n "${content}" || bailout "${cmd} line without value"
+		test -e "${STATE}/name" && bailout "duplicate name line"
+		local version="$(date +%Y%m%d)$VERSION"
+		local name="${content}"
+		local tagname="${name}/${version}"
+		echo "${name}" > "${STATE}/name"
+		echo "${version}" > "${STATE}/version"
+		echo "${tagname}" > "${STATE}/tag"
+
+		do_exec name
+		;;
+	version)
+		${has_base} || bailout "${cmd} before base"
+		test -n "${content}" || bailout "${cmd} line without value"
+		if ${STABLE}; then
+			local name="$(<"${STATE}/name")"
+			local version="$(sed "s;${name}/\([0-9]\{8\}\)-.*;\1${VERSION};" <<< "${content}")"
+			local tagname="${name}/${version}"
+			echo "${version}" > "${STATE}/version"
+			echo "${tagname}" > "${STATE}/tag"
+		fi
+		do_exec version
+		;;
+	release)
+		${has_base} || bailout "${cmd} before base"
+		test -n "${content}" || bailout "${cmd} line without value"
+		do_exec release
+		;;
+	topic|squash-topic)
+		case $cmd in
+			topic)			squash= ;;
+			squash-topic)		squash=1;;
+		esac
+		${has_base} || bailout "${cmd} before base"
+		test -n "${content}" || bailout "${cmd} line without value"
+		do_exec topic
+		;;
+	hashinfo)
+		${has_base} || bailout "${cmd} before base"
+		test -n "${content}" || bailout "${cmd} line without value"
+		do_exec hashinfo
+		;;
+	topic-range)
+		${has_base} || bailout "${cmd} before base"
+		test -n "${content}" || bailout "${cmd} line without value"
+		do_exec topic_range
+		;;
+	end)
+		${has_base} || bailout "${cmd} before base"
+		do_exec end
+		rm "${STATE}/base"
+		;;
+	esac
+
+	rm -f "${STATE}/failed"
+	echo "${line}"  >> "${STATE}/done"
+}
+
+parse_series() {
+	local namespace="${1}"
+	local series="${2}"
+	local squash
+	exec {series_in}< "${series}"
+	while read line <&${series_in}; do
+		parse "$line"
+	done
+	exec {series_in}<&-
+	unset series_in
+}
+
+### namespace: rebase ###
+
+rebase_other() {
+	if $has_base; then
+		: # skip
+	else
+		printf "%s\n" "$line" >&${series_out}
+	fi
+}
+
+rebase_base() {
+	echo "$line" >&${series_out}
+	echo 1 > "${STATE}/num"
+	${GIT} checkout -q "${baserev}" || abort "checkout '${content}' failed"
+}
+
+rebase_name() {
+	echo "$line" >&${series_out}
+	if ! ${STABLE}; then
+		rebase_version_impl
+	fi
+}
+
+rebase_version_impl() {
+	echo "# umpf-version: ${tagname}" >&${series_out}
+
+	if ! ${FORCE} && ${GIT} show-ref --tags -q "${tagname}"; then
+		abort "Tag '${tagname}' already exists!"
+	fi
+	if ! ${FORCE} && ${GIT} show-ref --tags -q "${tagname}-flat"; then
+		abort "Tag '${tagname}-flat' already exists!"
+	fi
+}
+
+rebase_version() {
+	if ${STABLE}; then
+		rebase_version_impl
+	fi
+}
+
+rebase_relative() {
+	echo "$line" >&${series_out}
+}
+
+rebase_try_continue() {
+	if ${GIT} diff-index --quiet HEAD --; then
+		info "rebase failed. Skipping empty commit..." &&
+		(${GIT} rebase --skip || rebase_try_continue)
+	else
+		${AUTO_RERERE} &&
+		info "rebase failed. Trying to continue with rerere solutions..." &&
+		test -z "$(${GIT} rerere remaining)" &&
+		info "Looks like rerere was successful." &&
+		${GIT} add -u &&
+		(${GIT} rebase --continue || rebase_try_continue)
+	fi
+}
+
+rebase_branch() {
+	local name="${1}"
+	local hash="${2}"
+	if ${has_failed}; then
+		if [ -d "${GIT_DIR}/rebase-apply" -o -d "${GIT_DIR}/rebase-merge" ]; then
+			${GIT} rebase --continue || bailout "'rebase --continue' failed"
+		fi
+	else
+		local reply topicrev base args
+		find_branch_rev "${name}" "${hash}"
+		topicrev="${reply}"
+		base="$(${GIT} rev-list -n1 --merges ${topicrev} ^$(cat ${STATE}/base))"
+		if [ -n "${base}" ]; then
+			if ${GIT} log -1 "${base}" | grep -q '^    umpf-merge-topic:'; then
+				: # stop at the umpf merge
+			elif [ "$(${GIT} log -1 "${base}" | sed -n '/^    # umpf-base/,/^    # umpf-end/p' | wc -l)" -gt 2 ]; then
+				: # stop at the umpf tag
+			else
+				base=
+			fi
+		fi
+		if [ -z "${base}" ]; then
+			base="$(${GIT} merge-base ${topicrev} $(cat ${STATE}/base ${STATE}/topics 2>/dev/null))"
+		fi
+		echo "${topicrev}" >> "${STATE}/topics"
+
+		if [ "${squash}" = 1 ]; then
+			echo "# umpf-squash-topic: ${name}" >&${series_out}
+		else
+			echo "# umpf-topic: ${name}" >&${series_out}
+		fi
+		echo "# umpf-hashinfo: ${topicrev}" >&${series_out}
+
+		${GIT} rev-parse HEAD > "${STATE}/prev_head"
+		if ${GIT} log --oneline "${base}..${topicrev}" | grep -q '\(fixup\|squash\)!'; then
+			args="-i --autosquash"
+		fi
+		if ! ${GIT} rebase -q ${args} --onto HEAD "${base}" "${topicrev}" >&2; then
+			if ! rebase_try_continue; then
+				bailout "rebase failed"
+			fi
+		fi
+	fi
+	if [ "${squash}" = 1 ]; then
+		local commit1 tree next
+		commit1="$(git rev-list $(<"${STATE}/prev_head")..  | tail -n1)"
+		tree="$(${GIT} log -1 --format="%T")"
+		next="$(${GIT} commit-tree "${tree}" -p "$(<"${STATE}/prev_head")" -m "tmp")" &&
+		${GIT} checkout -q "${next}" &&
+		${GIT} commit -q --amend -C "${commit1}"
+		if [ $? -ne 0 ]; then
+			bailout "failed to squash topic branch."
+		fi
+	fi
+	# Fix the committer date to get a reproducible result. Traditionally
+	# git rebase --committer-date-is-author-date was used here, but that
+	# yielded histories with non-monotonic commit dates which confuses git
+	# in some situations. See
+	# https://lore.kernel.org/git/20200325053039.GA651138@coredump.intra.peff.net/
+	# for some details. So we're cloning the committer date of the base commit.
+	committerdate="$(${GIT} for-each-ref --format="%(taggerdate:raw)" "refs/tags/$(<"${STATE}/base-name")")"
+	if [ -z "${committerdate}" ]; then
+		committerdate="$(${GIT} log -1 --format=%cd --date=raw "$(<"${STATE}/base")")"
+	fi
+
+	if ! FILTER_BRANCH_SQUELCH_WARNING=1 "${GIT}" filter-branch -f --env-filter "GIT_COMMITTER_DATE='$committerdate'; GIT_COMMITTER_NAME=umpf; GIT_COMMITTER_EMAIL=entwicklung@pengutronix.de" "$(<"${STATE}/prev_head").."; then
+		bailout "rewrite for reproducible commit-ish failed."
+	fi
+	echo "# umpf-topic-range: $(<"${STATE}/prev_head")..$(${GIT} rev-parse HEAD)" >&${series_out}
+}
+
+rebase_topic() {
+	if ${IDENTICAL}; then
+		if [ -n "${EXPORT_TOPIC}" ]; then
+			bailout "Identical export requires series with 'hashinfo'"
+		fi
+		EXPORT_TOPIC="${content}"
+	else
+		rebase_branch "${content}"
+	fi
+}
+rebase_hashinfo() {
+	if ${IDENTICAL}; then
+		rebase_branch "${EXPORT_TOPIC}" "${content}"
+		EXPORT_TOPIC=
+	fi
+}
+
+rebase_end() {
+	local version="$(<"${STATE}/version")"
+	local version_file
+	local meson_build
+	${GIT} rev-parse HEAD > "${STATE}/prev_head"
+	if grep -sq '^EXTRAVERSION =' Makefile; then
+
+		sed -i -r "s:^(EXTRAVERSION =.*)\$:\1-${version}:" Makefile
+		git add Makefile
+	fi
+	if version_file="$(grep -l AC_INIT configure.* 2>/dev/null)"; then
+		perl -0777 -i -p -e "s/\b(AC_INIT\()(\[[^\]]*\]|[^),]*)(\s*,\s*)(\[[^\]]*|[^,]*)(\]?[^)]*\))/\1\2\3\4.${version}\5/" "${version_file}"
+		git add "${version_file}"
+	fi
+	meson_build=${GIT_RELATIVE:+${GIT_RELATIVE}/}meson.build
+	if [ -e units/systemd-journald.socket ]; then
+		# for systemd fixup GIT_VERSION
+		# the project version is used in library names
+		sed -i "s/@VCS_TAG@/\0.${version}/" src/version/version.h.in &&
+		git add src/version/version.h.in
+	elif [ -e "${meson_build}" ]; then
+		prog="$(cat <<- EOF
+		s{
+		    \b(project\(
+		        (?<expr_comma>
+		            (?<expr>\s*
+		                ( (?<identifier>[a-zA-Z0-9_]++) # an identifier
+		                | ' [^']*+                     ' # a non-nested single quoted string
+		                | " [^"]*+                     " #              double
+		                | \[ (?&expr_comma)*(?&expr)  \] # list of expressions
+		                | \( (?&expr_comma)*
+		                    ( (?&expr)                   # function arguments
+		                    | (?<named_arg_comma>
+		                          (?<named_arg>\s*
+		                              (?&identifier)\s*:(?&expr)
+		                          )
+		                      ,\s*)*
+		                      (?&named_arg)              # named function arguments
+		                    ) \)
+		                | \.                             # struct members etc.
+		                )*                               # function name + arguments etc.
+		            \s*),\s*
+		        )*+
+		        (
+		            (?!version[\s:])
+		            (?&identifier)*\s*:(?&expr)\s*,\s*
+		        )*+                                      # all named arguments except 'version'
+		        version\s*:\s(?&expr)                    # 'version' argument
+		    )
+		}{\1 + '.${version}'}x
+		EOF
+		)"
+		perl -0777 -i -p -e "${prog}" "${meson_build}"
+		if grep -q 'gst_version_nano' "${meson_build}"; then
+			# our extra version is not the nano version
+			sed -i 's/\(if version_arr.length() ==\) 4/\1 5/' "${meson_build}"
+		fi
+		git add "${meson_build}"
+		local doap_script=${GIT_RELATIVE:+${GIT_RELATIVE}/}scripts/extract-release-date-from-doap-file.py
+		local doap=( ${GIT_RELATIVE:+${GIT_RELATIVE}/}*.doap )
+		if [ -e "${doap_script}" ] && ls "${doap[@]}" &>/dev/null; then
+			local base_rev="$(<"${STATE}/base")"
+			local BASE="$(${GIT} describe --abbrev=0 "${base_rev}" 2>/dev/null)"
+			local revision="${BASE}.${version}"
+			# create the release date string from the version
+			local created="$(echo ${version} | sed "s/\([0-9]\{4\}\)\([0-9]\{2\}\)\([0-9]\{2\}\).*/\1-\2-\3/")"
+			sed -i '1,/<release>/s,.*<release>.*, <release><Version><revision>'"${revision}</revision><created>${created}</created></Version></release>\n\n&," "${doap[@]}"
+			git add "${doap[@]}"
+		fi
+	fi
+	if ! ${GIT} diff-index --cached --quiet HEAD --; then
+		local tagname="$(<"${STATE}/tag")"
+		${GIT} commit --no-verify -m "Release ${tagname}"
+		echo "# umpf-release: ${tagname}" >&${series_out}
+		echo "# umpf-topic-range: $(<"${STATE}/prev_head")..$(${GIT} rev-parse HEAD)" >&${series_out}
+	fi
+	echo "$line" >&${series_out}
+}
+
+### command: export/continue ###
+
+create_tag() {
+	local args tagname parents tree topic
+
+	if [ ! -e "${STATE}/tag" ]; then
+		return
+	fi
+	tagname="$(<"${STATE}/tag")"
+
+	if ${FORCE}; then
+		args="-f"
+	fi
+
+	tree="$(${GIT} log -1 --format="%T")"
+	for topic in $(<"${STATE}/topics"); do
+		parents="${parents} -p ${topic}"
+	done
+	commit=$(${GIT} commit-tree "${tree}" -p HEAD ${parents} -m "${tagname}" -F "${STATE}/series.next")
+
+	if ${GIT} tag ${args} "${tagname}" "${commit}" >&2; then
+		if ${GIT} tag ${args} --cleanup=verbatim -F "${STATE}/series.next" "${tagname}-flat" >&2; then
+			${GIT} checkout -q "${tagname}"
+		else
+			${GIT} tag -d "${tagname}" >&2
+			${GIT} checkout -q "${commit}"
+			bailout "Could not create tag '${tagname}-flat'"
+		fi
+	else
+		${GIT} checkout -q "${commit}"
+		bailout "Could not create tag '${tagname}'"
+	fi
+}
+
+run_tag() {
+	set -e
+
+	exec {series_out}> >(tee -a "${STATE}/series.next")
+
+	parse_series rebase "${STATE}/series"
+
+	if [ -e "${STATE}/failed" ] && [ "$(<"${STATE}/failed")" != "create_tag" ]; then
+		abort "unexpected failure while parsing '${STATE}/series'"
+	fi
+	exec {series_out}<&-
+	unset series_out
+
+	# series was parsed completely, but if create_tag bails out, signal
+	# this failure to ourselves if the user continues later.
+	line="create_tag"
+	create_tag
+
+	cleanup
+}
+
+do_tag() {
+	prepare_persistent tag "${@}"
+	run_tag
+}
+
+### namespace: format_patch ###
+
+format_patch_other() {
+	if $has_base; then
+		: # skip
+	else
+		if [[ "${line}" =~ 'git-ptx-patches magic' ]]; then
+			local md5="$(cat "${STATE}/series.next"|md5sum)"
+			echo "# ${md5} git-ptx-patches magic" >&${series_out}
+		else
+			printf "%s\n" "$line" >&${series_out}
+		fi
+	fi
+}
+
+format_patch_base() {
+	echo "$line" >&${series_out}
+	echo 1 > "${STATE}/num"
+}
+
+format_patch_name() {
+	echo "$line" >&${series_out}
+}
+
+format_patch_version() {
+	echo "$line" >&${series_out}
+}
+
+format_patch_release() {
+	echo "$line" >&${series_out}
+}
+
+format_patch_relative() {
+	echo "$line" >&${series_out}
+}
+
+format_patch_topic() {
+	echo "$line" >&${series_out}
+}
+
+format_patch_hashinfo() {
+	echo "$line" >&${series_out}
+}
+
+filter_patches() {
+	if ${BB}; then
+		echo 'SRC_URI += "\'
+		sed "s,^${STATE}/\(.*\)$,  file://\1 \\\\,"
+		echo '  "'
+	else
+		sed "s,^${STATE}/patches/,,"
+	fi
+}
+
+format_patch_topic_range() {
+	echo "$line" >&${series_out}
+	local range="${content}"
+	local num="$(<"${STATE}/num")"
+	local relative=${GIT_RELATIVE+--relative=${GIT_RELATIVE}}
+	${GIT} format-patch --indent-heuristic --no-renames -N --no-signature ${relative} --start-number ${num} --summary --stat=80 -o "${STATE}/patches" --notes "${range}" |
+			filter_patches >&${series_out}
+	num="$((num + $(${GIT} rev-list "${range}" | wc -l)))"
+	num="$((((num-2)/${BLOCK_SIZE}+1)*${BLOCK_SIZE}+1))"
+	echo "${num}" > "${STATE}/num"
+}
+
+format_patch_end() {
+	echo "$line" >&${series_out}
+}
+
+
+### command: format_patch ###
+
+remove_patches() {
+	local line cmd content
+
+	parse_setup "$@"
+	case "${cmd}" in
+	base)
+		begin=1
+		;;
+	end)
+		begin=
+		;;
+	esac
+	if ${BB}; then
+		line="$(sed -n -r "s,file://patches/(.*) \\\\$,\1,p" <<< "$line")"
+	fi
+	case "${line}" in
+	[0-9][0-9][0-9][0-9]-*)
+		[ -z "${begin}" ] && return
+		[ ! -e "${PATCH_DIR}/${line}" ] && return
+		info "deleting '${line}'..."
+		rm "${PATCH_DIR}/${line}"
+		;;
+	esac
+}
+
+run_format_patch() {
+	exec {series_out}> >(tee -a "${STATE}/series.next")
+
+	parse_series format_patch "${STATE}/series"
+
+	if [ -e "${STATE}/failed" ]; then
+		bailout "unexpected failure while parsing '${STATE}/series'"
+	fi
+
+	exec {series_out}<&-
+	unset series_out
+
+	mkdir -p "${PATCH_DIR}" ||  bailout "Failed to create patch dir"
+	for patch in "${STATE}/patches/"*; do
+		tail -n+2 "${patch}" > "${PATCH_DIR}/$(basename "${patch}")"
+	done
+	if ${BB}; then
+		cp "${STATE}/series.next" "${PATCH_DIR}/series.inc"
+	else
+		cp "${STATE}/series.next" "${PATCH_DIR}/series"
+	fi
+
+	cleanup
+}
+
+do_format_patch() {
+	prepare_persistent format_patch "${@}"
+
+	if ${UPDATE}; then
+		if [ ! -d "${PATCH_DIR}" ]; then
+			abort "update without existing patch dir makes no sense"
+		fi
+		SERIES="${SERIES:-${PATCH_DIR}/series}"
+		if ${BB}; then
+			OLD_SERIES="${PATCH_DIR}/series.inc"
+		else
+			OLD_SERIES="${PATCH_DIR}/series"
+		fi
+		if [ ! -f "${OLD_SERIES}" ]; then
+			abort "'${OLD_SERIES}' is missing!"
+		fi
+		while read -r line; do
+			remove_patches "${line}"
+		done < "${OLD_SERIES}"
+	elif ${FORCE} &&  [ -d "${PATCH_DIR}" ]; then
+		rm -r "${PATCH_DIR}" || abort "Failed to remove old patch dir"
+	elif [ -d "${PATCH_DIR}" ]; then
+		abort "patch dir '${PATCH_DIR}' exists!"
+	fi
+
+	run_format_patch
+}
+
+
+### namespace: build ###
+
+build_base() {
+	touch "${STATE}/merge"
+	${GIT} checkout -q "${baserev}" || abort "checkout '${content}' failed"
+}
+
+build_branch() {
+	local name="${1}"
+	local hash="${2}"
+	if ${has_failed}; then
+		if ! ${GIT} diff-index --quiet --cached HEAD; then
+			if ! ${GIT} commit --no-verify; then
+				bailout "Merging '${name}' failed!"
+			fi
+		fi
+	else
+		local reply msg
+		find_branch_rev "${name}" "${hash}"
+		if ! merge "${reply}" "${name}"; then
+			bailout "Merging '${name}' failed!"
+		fi
+	fi
+}
+
+build_topic() {
+	if ${IDENTICAL}; then
+		if [ -n "${MERGE_TOPIC}" ]; then
+			bailout "Identical merge requires series with 'hashinfo'"
+		fi
+		MERGE_TOPIC="${content}"
+	else
+		build_branch "${content}"
+	fi
+}
+build_hashinfo() {
+	if ${IDENTICAL}; then
+		build_branch "${MERGE_TOPIC}" "${content}"
+		MERGE_TOPIC=
+	fi
+}
+
+
+### command: build ###
+
+run_build() {
+	parse_series build "${STATE}/series"
+	${GIT} notes add -m "umpf-build-note: $(<"${STATE}/base-name") $(<"${STATE}/name")"
+
+	cleanup
+}
+
+do_build() {
+	prepare_persistent build "${@}"
+	run_build
+}
+
+### command: merge ###
+
+do_merge() {
+	local branch
+	if [ $# -lt 1 -o $# -gt 2 ]; then
+		abort "usage: umpf merge <commit-ish> [<name>]"
+	fi
+	prepare
+	merge "${@}"
+}
+
+### namespace: diff ###
+
+diff_topic() {
+	if ! ${IDENTICAL}; then
+		local reply
+		find_branch_rev "${content}"
+		echo "${reply}" >> "${STATE}/topics"
+	fi
+	echo "${content}" >> "${STATE}/topic-names"
+}
+
+diff_hashinfo() {
+	if ${IDENTICAL}; then
+		echo "${content}" >> "${STATE}/topics"
+	fi
+}
+
+diff_end() {
+	local head
+	local -a branches branch_names
+	branches=( $(<"${STATE}/topics") )
+	if [ -e "${STATE}/flat" ]; then
+		branches[${#branches[@]}]="$(<"${STATE}/flat")"
+	fi
+	branch_names=( $(<"${STATE}/topic-names") )
+	head="$(<"${STATE}/head")"
+
+	show_diff "${head}" "$(<"${STATE}/base")"
+}
+
+### command: diff ###
+
+do_diff() {
+	prepare_persistent diff "${@}"
+
+	echo "${SERIES}" > "${STATE}/head"
+	parse_series diff "${STATE}/series"
+
+	if ${IDENTICAL} && [ ! -e "${STATE}/topics" ]; then
+		abort "Identical diff requires series with 'hashinfo'"
+	fi
+
+	cleanup
+}
+
+### command: distribute ###
+
+apply_to_topic() {
+	local rev branch topic state
+	rev="${1}"
+	branch=$(cat "${STATE}/distribute-branch" 2>/dev/null)
+	topic=$(cat "${STATE}/distribute-topic" 2>/dev/null)
+	state=$(cat "${STATE}/distribute-state" 2>/dev/null)
+
+	echo
+	GIT_PAGER= ${GIT} log --oneline -1 "${rev}"
+
+	while [ -z "${topic}" ]; do
+		local i=0 ret
+		for branch in "${branch_names[@]}"; do
+			echo "${i}) ${branch}"
+			i=$((i+1))
+		done
+		echo "s) show patch"
+		echo "x) skip patch"
+		read -e -p "Branch: " ret
+		case "${ret}" in
+		s)
+			${GIT} show "${rev}"
+			continue
+			;;
+		x)
+			return
+			;;
+		[0-9]*)
+			branch="${branch_names[${ret}]}"
+			if [ -z "${branch}" ]; then
+				echo "'$ret' is not a valid branch number"
+			fi
+			;;
+		*)
+			echo "Invalid command '$ret'"
+			continue
+		esac
+		if ! topic="$(${GIT} rev-parse -q --verify "refs/umpf/${branch}^{}")"; then
+			topic="${branches[${ret}]}"
+		fi
+		if [ -z "${topic}" ]; then
+			local reply
+			IDENTICAL=false find_branch_rev "${branch}"
+			topic="${reply}"
+			branches[${ret}]="${topic}"
+		fi
+		echo "${branch}" > "${STATE}/distribute-branch"
+		echo "${topic}" > "${STATE}/distribute-topic"
+	done
+	case "${state}" in
+	fatal)
+		bailout "Fatal error occurred. Cannot continue."
+		;;
+	"")
+		if ! ${GIT} checkout -q "${topic}"; then
+			echo fatal > "${STATE}/distribute-state"
+			bailout "failed to checkout '${branch}' (${topic})! This should not happen!"
+		fi
+		echo checkout > "${STATE}/distribute-state"
+		;&
+	checkout)
+		local args
+		if [ -e "${GIT_DIR}/CHERRY_PICK_HEAD" ]; then
+			args="--continue"
+		else
+			args="${rev}"
+		fi
+		if ! ${GIT} cherry-pick "${args}"; then
+			bailout "cherry-pick ${args} failed."
+		fi
+		echo cherry-pick > "${STATE}/distribute-state"
+		;&
+	cherry-pick)
+		if ! ${GIT} update-ref --no-deref "refs/umpf/${branch}" HEAD; then
+			echo fatal > "${STATE}/distribute-state"
+			bailout "update-ref failed! This should not happen!"
+		fi
+		;;
+	esac
+	rm "${STATE}/distribute-branch"
+	rm "${STATE}/distribute-topic"
+	rm "${STATE}/distribute-state"
+}
+
+update_local_topic() {
+	local topic="${GIT_REMOTE}${1}"
+	local umpf_topic="refs/umpf/${1}"
+	if ${GIT} rev-parse --verify -q "${topic}" > /dev/null; then
+		info "Fast-forwarding '${topic}'..."
+		if ! ${GIT} checkout -q "${topic#refs/heads/}"; then
+			info "Could not checkout '${topic}'. Skipping."
+			return
+		fi
+		if ! ${GIT} merge -q --ff-only "${umpf_topic}"; then
+			info "Could not update '${topic}'. Skipping."
+			return
+		fi
+	else
+		info "Creating new branch '${topic}'..."
+		if ! ${GIT} checkout -q -b "${topic#refs/heads/}" "${umpf_topic}"; then
+			info "Could not checkout '${umpf_topic}' as '${topic}'. Skipping."
+			return
+		fi
+	fi
+	${GIT} update-ref -d "${umpf_topic}"
+}
+
+update_remote_topic() {
+	local topic="${1}"
+	local umpf_topic="refs/umpf/${1}"
+
+	info "Pushing '${topic}' to '${GIT_REMOTE%/}'..."
+	if ! ${GIT} push "${GIT_REMOTE%/}" "${umpf_topic}:refs/heads/${topic}"; then
+		info "Could not update '${GIT_REMOTE}${topic}'. Skipping."
+		return
+	fi
+	${GIT} update-ref -d "${umpf_topic}"
+}
+
+update_topics() {
+	local target
+	local -a topics
+	if ${GIT} remote | grep -q "^${GIT_REMOTE%/}$"; then
+		target="remote"
+	else
+		target="local"
+	fi
+	info
+	info "Updating ${target} topic branches for '${GIT_REMOTE}'..."
+	read -p "Press Enter to continue."
+	topics=( $(${GIT} show-ref | sed -r -n 's,.* refs/umpf/(.*),\1,p') )
+	for topic in "${topics[@]}"; do
+		update_${target}_topic "${topic}"
+	done
+}
+
+run_distribute(){
+	local -a branches branch_names
+	branches=( $(<"${STATE}/topics") )
+	if ! ${IDENTICAL}; then
+		branch_names=( $(<"${STATE}/topic-names") )
+	fi
+
+	exec {patches_in}< "${STATE}/diff"
+	while read rev <&${patches_in}; do
+		grep -q "^${rev}$" "${STATE}/distribute-done" 2> /dev/null && continue
+		apply_to_topic "${rev}"
+		echo "${rev}" >> "${STATE}/distribute-done"
+	done
+	exec {patches_in}<&-
+
+	update_topics
+	undo_persistent
+	if ${GIT} show-ref | grep -q " refs/umpf/"; then
+		info
+		info "Failed to update the following topic branches:"
+		${GIT} show-ref | sed -r -n 's,.* refs/umpf/(.*),\1,p'
+		info
+		bailout
+	fi
+	cleanup
+}
+
+do_distribute() {
+	prepare_persistent distribute "${@}"
+
+	echo "${SERIES}" > "${STATE}/head"
+	parse_series diff "${STATE}/series"
+
+	if ${IDENTICAL} && [ ! -e "${STATE}/topics" ]; then
+		abort "Identical diff requires series with 'hashinfo'"
+	fi
+
+	run_distribute
+}
+
+### command: continue ###
+
+do_continue() {
+	prepare
+
+	test -f "${STATE}/command" || bailout "nothing to continue!"
+	. "${STATE}/config" || bailout "Failed to source '${STATE}/config'"
+
+	case "$(<"${STATE}/command")" in
+	tag)
+		run_tag
+		;;
+	build)
+		run_build
+		;;
+	distribute)
+		run_distribute
+		;;
+	*)
+		bailout "nothing to continue!"
+		;;
+	esac
+}
+
+### command: abort ###
+
+do_abort() {
+	prepare
+	abort
+}
+
+### command: import ###
+
+do_show() {
+	VERBOSE=true
+	prepare_persistent show "${@}"
+	cleanup
+}
+
+### command: init ###
+
+do_init() {
+	if [ $# = 0 ]; then
+		bailout "usage: umpf init <seriesfile>"
+	fi
+	SERIES="${1}"
+	if ! ${FORCE} && [ -e "${SERIES}" ]; then
+		bailout "series file '${SERIES}' exists"
+	fi
+
+	read -e -p "base: " BASE
+	echo "# umpf-base: ${BASE}" >> "${SERIES}"
+	if [ -n "${GIT_RELATIVE}" ]; then
+		echo "# umpf-relative: ${GIT_RELATIVE}" >> "${SERIES}"
+	fi
+	read -e -p "name: " NAME
+	echo "# umpf-name: ${NAME}" >> "${SERIES}"
+	while true; do
+		read -e -p "topic: " NAME
+		test -z "${NAME}" && break
+		echo "# umpf-topic: ${NAME}" >> "${SERIES}"
+	done
+	echo "# umpf-end" >> "${SERIES}"
+}
+
+setup "${@}"
+
+command_func="do_${COMMAND//-/_}"
+if declare -F | grep " ${command_func}$" &>/dev/null; then
+	"${command_func}" "${ARGS[@]}"
+else
+	info "Unknown command '${COMMAND}'"
+	usage
+	exit 1
+fi
+
