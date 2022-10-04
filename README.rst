@@ -46,11 +46,9 @@ More details about umpf can be found in the documentation.
 * `Getting Started`_
 * `umpf from the Inside`_
 * `Tips and Tricks`_
-* `umpf from the Inside`_
 
 .. _`What is an umpf?`: doc/what-is-an-umpf.rst
 .. _`Getting Started`: doc/getting-started.rst
-.. _`umpf from the Inside`: doc/inner-workings.rst
 .. _`Tips and Tricks`: doc/tips.rst
 .. _`umpf from the Inside`: doc/inner-workings.rst
 
