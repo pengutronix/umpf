@@ -14,3 +14,26 @@ jobs:
 
     - name: Run shellcheck
       run: shellcheck -S warning -e SC2155 umpf
+
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.x'
+
+    - name: Install Meson & Ninja
+      run: pip install meson ninja
+
+    - name: Setup builddir
+      run: meson setup builddir/
+
+    - name: Setup git
+      run: |
+        git config --global user.name "UMPF Test Committer"
+        git config --global user.email "umpf@example.com"
+
+    - name: Run tests
+      run: meson test -C builddir/
+
+    - name: Dump test log
+      if: failure()
+      run: cat builddir/meson-logs/testlog.txt
