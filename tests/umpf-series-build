@@ -1,0 +1,13 @@
+#!/bin/sh
+#
+# Test creating an umpf build from a series file with "umpf build".
+#
+
+umpf build series --remote=origin
+
+git ls-tree umpf-build > ls-tree.ref
+git ls-tree HEAD > ls-tree.build
+diff -u ls-tree.ref ls-tree.build
+
+umpf show HEAD > series.build
+diff -u ${TEST_DIR}/series-merge.ref series.build

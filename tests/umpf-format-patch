@@ -1,0 +1,8 @@
+#!/bin/bash
+#
+# Test creating a patchset with "umpf format-patch".
+#
+
+umpf format-patch umpf-tag --patchdir=patches
+
+diff -u ${TEST_DIR}/series-format-patch.ref patches/series

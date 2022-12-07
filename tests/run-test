@@ -1,0 +1,43 @@
+#!/bin/sh
+#
+# Extract the git bundle, prepare the git repository, and run a single test.
+# This is intended to be run from the Meson test framework.
+#
+set -e
+
+fail() {
+	echo "$1"
+	exit 1
+}
+
+TEST="$1"
+
+if [ -z "$1" ]; then fail "usage: run-test <test>"; fi
+if [ -z "${SOURCE_ROOT}" ]; then fail "SOURCE_ROOT not set"; fi
+if [ -z "${TEST_DIR}" ]; then fail "TEST_DIR not set"; fi
+if [ -z "${BUILD_DIR}" ]; then fail "BUILD_DIR not set"; fi
+if [ ! -x "${SOURCE_ROOT}/umpf" ]; then fail "umpf not found in SOURCE_ROOT"; fi
+if [ -z "$(command -v git)" ]; then fail "git not found in PATH"; fi
+
+echo "---------------------------------------- preparing git repository"
+rm -rf "${BUILD_DIR:?}/${TEST}"
+git clone "${TEST_DIR}/test-git" "${BUILD_DIR}/${TEST}"
+cd "${BUILD_DIR}/${TEST}"
+git config --local advice.detachedHead false
+git branch a origin/a
+git branch b origin/b
+cat > series <<EOF
+# umpf-base: base
+# umpf-name: name
+# umpf-topic: a
+# umpf-topic: b
+# umpf-end
+EOF
+
+echo "---------------------------------------- running test \"${TEST}\""
+SOURCE_DATE_EPOCH="$(git log -1 --pretty=%ct umpf-tag)"
+export SOURCE_DATE_EPOCH
+PATH="${SOURCE_ROOT}:${PATH}"
+set -x
+# shellcheck source=/dev/null
+. "${TEST_DIR}/${TEST}"

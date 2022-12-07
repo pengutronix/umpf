@@ -1,0 +1,11 @@
+#!/bin/sh
+#
+# Test interactive series file creation with "umpf init".
+#
+
+umpf init series.init --base=base --name=name <<EOF
+a
+b
+EOF
+
+diff -u series series.init

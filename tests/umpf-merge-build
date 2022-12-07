@@ -1,0 +1,10 @@
+#!/bin/sh
+#
+# Test creating an umpf build from umpf merged topic branches with "umpf build".
+#
+
+git checkout umpf-merge
+umpf build --remote=origin --base=base --name=name
+
+umpf show > series.build
+diff -u ${TEST_DIR}/series-merge.ref series.build
