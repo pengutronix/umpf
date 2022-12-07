@@ -785,7 +785,7 @@ parse() {
 		line="# umpf-name: ${content}"
 		test -n "${content}" || bailout "${cmd} line without value"
 		test -e "${STATE}/name" && bailout "duplicate name line"
-		local version="$(date +%Y%m%d)$VERSION"
+		local version="$(date +%Y%m%d ${SOURCE_DATE_EPOCH:+--date=@${SOURCE_DATE_EPOCH}})${VERSION}"
 		local name="${content}"
 		local tagname="${name}/${version}"
 		echo "${name}" > "${STATE}/name"
