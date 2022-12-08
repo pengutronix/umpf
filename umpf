@@ -527,7 +527,6 @@ import_series() {
 
 	local -a merges branches branch_names
 	local -A branch_squashes
-	local BASE NAME
 
 	base_rev="$(${GIT} merge-base "${base_rev}^1" "${base_rev}^2")"
 	exec {revlistfd}< <(${GIT} rev-list --merges --topo-order --parents "${base_rev}...${import}")
@@ -542,7 +541,7 @@ import_series() {
 			fi
 		done
 		exec {localfd}<&-
-		if [ -n "${BASE}" ]; then
+		if [[ -n "${BASE}" && -n "${NAME}" ]]; then
 			break
 		fi
 	done
@@ -1630,12 +1629,16 @@ do_init() {
 		bailout "series file '${SERIES}' exists"
 	fi
 
-	read -e -p "base: " BASE
+	if [ -z "${BASE}" ]; then
+		read -e -p "base: " BASE
+	fi
 	echo "# umpf-base: ${BASE}" >> "${SERIES}"
 	if [ -n "${GIT_RELATIVE}" ]; then
 		echo "# umpf-relative: ${GIT_RELATIVE}" >> "${SERIES}"
 	fi
-	read -e -p "name: " NAME
+	if [ -z "${NAME}" ]; then
+		read -e -p "name: " NAME
+	fi
 	echo "# umpf-name: ${NAME}" >> "${SERIES}"
 	while true; do
 		read -e -p "topic: " NAME
