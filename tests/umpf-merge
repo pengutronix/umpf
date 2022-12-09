@@ -1,0 +1,11 @@
+#!/bin/sh
+#
+# Test merging topic branches with "umpf merge".
+#
+
+umpf merge a
+umpf merge b
+
+umpf show --base=base --name=name > series.merge
+
+diff -u ${TEST_DIR}/series-merge.ref series.merge

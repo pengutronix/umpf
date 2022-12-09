@@ -1,0 +1,13 @@
+#!/bin/sh
+#
+# Test creating an identical umpf tag from an umpf build with modified branches
+# with "umpf tag --identical".
+#
+
+git switch a && echo "a2" >> a.txt && git add a.txt && git commit -m "a2"
+git switch b && echo "b2" >> b.txt && git add b.txt && git commit -m "b2"
+
+umpf tag --version=2 umpf-tag --remote=refs/heads --identical --base=base --name=name
+
+git log --format=%B -n 1 | grep "^# umpf-" > series.tag
+diff -u ${TEST_DIR}/series-v2.ref series.tag

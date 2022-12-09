@@ -1,0 +1,9 @@
+#!/bin/sh
+#
+# Test creating an umpf tag from a series file with "umpf tag".
+#
+
+umpf tag --version=2 series --remote=origin
+
+git log --format=%B -n 1 | grep "^# umpf-" > series.tag
+diff -u ${TEST_DIR}/series-v2.ref series.tag

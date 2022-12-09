@@ -1,0 +1,15 @@
+#!/bin/sh
+#
+# Test distributing patches on top of an umpf build to local branches with
+# "umpf distribute".
+#
+
+git switch -c work umpf-build
+echo "a2" >> a.txt && git add a.txt && git commit -m "a2"
+echo "b2" >> b.txt && git add b.txt && git commit -m "b2"
+
+umpf distribute --remote=refs/heads <<EOF
+0
+1
+
+EOF
