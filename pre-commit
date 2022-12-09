@@ -1,0 +1,28 @@
+#!/bin/sh
+#
+# A git pre-commit hook script to make sure no new shellcheck warnings are
+# introduced.
+
+# Redirect output to stderr.
+exec 1>&2
+
+if [ ! -e /usr/bin/shellcheck ]; then
+	cat <<EOF
+Error: Commit aborted in pre-commit hook due to missing shellcheck.
+
+Please install shellcheck to use this hook.
+EOF
+	exit 1
+fi
+
+# We ignore the check SC2155 "Declare and assign separately to avoid masking
+# return values", as this reduced legibility and return values are ignored.
+if ! shellcheck -S warning -e SC2155 umpf; then
+	cat <<EOF
+
+Error: Commit aborted in pre-commit hook due to shellcheck warnings.
+
+Please make sure "shellcheck -S warning -e SC2155 umpf" reports no warnings before trying to commit.
+EOF
+	exit 1
+fi

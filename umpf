@@ -113,7 +113,7 @@ abort() {
 		info "$*"
 	fi
 
-	if [ -d "${GIT_DIR}/rebase-apply" -o -d "${GIT_DIR}/rebase-merge" ]; then
+	if [[ -d "${GIT_DIR}/rebase-apply" || -d "${GIT_DIR}/rebase-merge" ]]; then
 		${GIT} rebase --abort
 	fi
 	if [ -f "${GIT_DIR}/CHERRY_PICK_HEAD" ]; then
@@ -215,7 +215,7 @@ setup() {
 		shift
 		case "${OPT}" in
 		--auto-rerere)
-			if [ "$(${GIT} config --get rerere.enabled)" = "true" -o -d "$(${GIT} rev-parse --git-common-dir)/rr-cache" ]; then
+			if [[ "$(${GIT} config --get rerere.enabled)" = "true" || -d "$(${GIT} rev-parse --git-common-dir)/rr-cache" ]]; then
 				AUTO_RERERE=true
 			else
 				bailout "--auto-rerere is given, but rerere is not enabled in current repo."
@@ -332,19 +332,20 @@ undo_persistent() {
 ### helper ###
 
 nice_branch() {
-	reply=( $(sed -r -n 's,^(remotes/([^/]*)/|heads/)?(.*),\3 \2,p' <<< "${1}") )
+	read -r -a replies < <(sed -r -n 's,^(remotes/([^/]*)/|heads/)?(.*),\3 \2,p' <<< "${1}")
 }
 
 find_branch_rev() {
 	local name branch remote
-	local -a branches
+	local -a branches replies
 	name="${1}"
 	if ${IDENTICAL}; then
 		reply="${2}"
 		return
 	fi
 	remote="${GIT_REMOTE}"
-	branches=( $(${GIT} show-ref | sed -n -r "s:[^ ]* refs/((heads|remotes/[^ ]*)/${name})\$:\1:p" | sort -r) )
+	mapfile -t branches < <(${GIT} show-ref | sed -n -r "s:[^ ]* refs/((heads|remotes/[^ ]*)/${name})\$:\1:p" | sort -r)
+
 	while [ -z "${GIT_REMOTE}" ] || ! reply="$(${GIT} rev-parse "${remote}${name}^{}" 2> /dev/null)"; do
 		if [ "${#branches[@]}" -eq 0 ]; then
 			break
@@ -357,15 +358,15 @@ find_branch_rev() {
 		local i=0 def=0
 		for branch in "${branches[@]}"; do
 			nice_branch "${branch}"
-			echo "${i}) ${reply[1]:+${reply[1]}/}${reply[0]}"
-			if [ "${GIT_FALLBACK_REMOTE}" == "${reply[1]}/" ]; then
+			echo "${i}) ${replies[1]:+${replies[1]}/}${replies[0]}"
+			if [ "${GIT_FALLBACK_REMOTE}" == "${replies[1]}/" ]; then
 				def="${i}"
 			fi
 			i=$((i+1))
 		done
 		read -e -i ${def} -p "branch number: " i
 		nice_branch "${branches[$i]}"
-		remote="${reply[1]:-refs/heads}/"
+		remote="${replies[1]:-refs/heads}/"
 		if [ -z "${GIT_REMOTE}" ]; then
 			GIT_REMOTE="${remote}"
 			info "Using remote '${GIT_REMOTE}'."
@@ -386,7 +387,7 @@ find_branch_rev() {
 		fi
 		if [ "$(${GIT} merge-base "${reply}" "${branch}")" == "${reply}" ]; then
 			info "Warning: The following commits are in '${branch}' but not in '${remote}${name}':"
-			GIT_PAGER= ${GIT} log --oneline "${reply}...${b}"
+			GIT_PAGER="" ${GIT} log --oneline "${reply}...${b}"
 			if tty -s; then
 				read -p "Press Enter to continue."
 			fi
@@ -402,7 +403,7 @@ list_branch_names() {
 
 find_branch_name() {
 	local head merge mergelog candidate
-	local -a branches reply
+	local -a branches replies
 	head="${1}"
 	merge="${2}"
 	mergelog=$(${GIT} log --oneline -1 "${head}")
@@ -414,10 +415,10 @@ find_branch_name() {
 		return
 	fi
 	if [ -n "${GIT_REMOTE}" ]; then
-		branches=( $(list_branch_names "${merge}" "remotes/${GIT_REMOTE}") )
+		mapfile -t branches < <(list_branch_names "${merge}" "remotes/${GIT_REMOTE}")
 	fi
 	if [ ${#branches[@]} -ne 1 ]; then
-		branches=( $(list_branch_names "${merge}") )
+		mapfile -t branches < <(list_branch_names "${merge}")
 	fi
 	case "${#branches[@]}" in
 	0)
@@ -427,23 +428,23 @@ find_branch_name() {
 		;;
 	1)
 		nice_branch "${branches[0]}"
-		name="${reply[0]}"
+		name="${replies[0]}"
 		;;
 	*)
 		info "Multiple branches found for $mergelog"
 		local i=0
 		for branch in "${branches[@]}"; do
 			nice_branch "${branch}"
-			echo "${i}) ${reply[1]:+[${reply[1]}]} ${reply[0]}"
+			echo "${i}) ${replies[1]:+[${replies[1]}]} ${replies[0]}"
 			i=$((i+1))
 		done
 		while [ -z "${name}" ]; do
 			read -e -p "branch number: " i
 			nice_branch "${branches[$i]}"
-			name="${reply[0]}"
+			name="${replies[0]}"
 		done
 		if [ -z "${GIT_REMOTE}" ]; then
-			GIT_REMOTE="${reply[1]:-refs/heads}/"
+			GIT_REMOTE="${replies[1]:-refs/heads}/"
 			info "Using remote '${GIT_REMOTE}'."
 		fi
 	esac
@@ -485,7 +486,8 @@ topic_from_rev() {
 		rev="$(${GIT} describe --all "${1}")"
 		rev="$(${GIT} rev-parse --symbolic-full-name "${rev}")"
 	fi
-	local -a remotes=( $(${GIT} remote) )
+	local -a remotes
+	mapfile -t remotes < <(${GIT} remote)
 	remotes=( "${remotes[@]/#/refs\/remotes\/}" "refs/heads" )
 	local pattern="${remotes[*]}"
 	pattern="^(${pattern// /|})/"
@@ -500,11 +502,11 @@ import_series() {
 
 	for base_rev in $(${GIT} rev-parse ${import}) $(${GIT} rev-list --merges -1 "${import}"); do
 		${GIT} log -1 "${base_rev}" | sed -n '/^    # umpf-base/,/^    # umpf-end/p' > "${series}"
-		if [ $(wc -l < "${series}") -gt 2 ]; then
+		if [ "$(wc -l < "${series}")" -gt 2 ]; then
 			break
 		fi
 	done
-	if [ $(wc -l < "${series}") -gt 2 ]; then
+	if [ "$(wc -l < "${series}")" -gt 2 ]; then
 		info "Using series from commit message..."
 		${GIT} log -1 --format='%b' "${base_rev}" | sed '$d' > "${series}"
 		if ${STABLE}; then
@@ -567,12 +569,12 @@ import_series() {
 		fi
 	fi
 	echo "# umpf-name: ${NAME}" >> "${series}"
-	merges=( $(${GIT} rev-list --merges --reverse --topo-order --parents "${BASE}...${import}" | {
+	mapfile -t merges < <(${GIT} rev-list --merges --reverse --topo-order --parents "${BASE}...${import}" | {
 		while read head base merges; do
 			for merge in ${merges}; do
 				echo "${head}:${merge}"
 			done
-		done } ) )
+		done } )
 	names="#"
 	for merge in "${merges[@]}"; do
 		local squash=
@@ -606,7 +608,7 @@ import_series() {
 }
 
 merge() {
-	local rev topic into msg squash_topic
+	local rev topic into squash_topic
 	rev="${1}"
 	topic="${2}"
 	if [ -z "${topic}" ]; then
@@ -913,14 +915,14 @@ rebase_branch() {
 	local name="${1}"
 	local hash="${2}"
 	if ${has_failed}; then
-		if [ -d "${GIT_DIR}/rebase-apply" -o -d "${GIT_DIR}/rebase-merge" ]; then
+		if [[ -d "${GIT_DIR}/rebase-apply" || -d "${GIT_DIR}/rebase-merge" ]]; then
 			${GIT} rebase --continue || bailout "'rebase --continue' failed"
 		fi
 	else
 		local reply topicrev base args
 		find_branch_rev "${name}" "${hash}"
 		topicrev="${reply}"
-		base="$(${GIT} rev-list -n1 --merges ${topicrev} ^$(cat ${STATE}/base))"
+		base="$(${GIT} rev-list -n1 --merges ${topicrev} "^$(cat ${STATE}/base)")"
 		if [ -n "${base}" ]; then
 			if ${GIT} log -1 "${base}" | grep -q '^    umpf-merge-topic:'; then
 				: # stop at the umpf merge
@@ -931,7 +933,9 @@ rebase_branch() {
 			fi
 		fi
 		if [ -z "${base}" ]; then
-			base="$(${GIT} merge-base ${topicrev} $(cat ${STATE}/base ${STATE}/topics 2>/dev/null))"
+			local -a topics
+			mapfile -t topics < <(cat ${STATE}/topics 2>/dev/null)
+			base="$(${GIT} merge-base ${topicrev} "$(cat ${STATE}/base 2>/dev/null)" "${topics[@]}")"
 		fi
 		echo "${topicrev}" >> "${STATE}/topics"
 
@@ -954,7 +958,7 @@ rebase_branch() {
 	fi
 	if [ "${squash}" = 1 ]; then
 		local commit1 tree next
-		commit1="$(git rev-list $(<"${STATE}/prev_head")..  | tail -n1)"
+		commit1="$(git rev-list "$(<"${STATE}/prev_head").."  | tail -n1)"
 		tree="$(${GIT} log -1 --format="%T")"
 		next="$(${GIT} commit-tree "${tree}" -p "$(<"${STATE}/prev_head")" -m "tmp")" &&
 		${GIT} checkout -q "${next}" &&
@@ -1305,7 +1309,7 @@ build_branch() {
 			fi
 		fi
 	else
-		local reply msg
+		local reply
 		find_branch_rev "${name}" "${hash}"
 		if ! merge "${reply}" "${name}"; then
 			bailout "Merging '${name}' failed!"
@@ -1349,7 +1353,7 @@ do_build() {
 
 do_merge() {
 	local branch
-	if [ $# -lt 1 -o $# -gt 2 ]; then
+	if [[ $# -lt 1 || $# -gt 2 ]]; then
 		abort "usage: umpf merge <commit-ish> [<name>]"
 	fi
 	prepare
@@ -1376,11 +1380,12 @@ diff_hashinfo() {
 diff_end() {
 	local head
 	local -a branches branch_names
-	branches=( $(<"${STATE}/topics") )
+	mapfile -t branches < "${STATE}/topics"
 	if [ -e "${STATE}/flat" ]; then
 		branches[${#branches[@]}]="$(<"${STATE}/flat")"
 	fi
-	branch_names=( $(<"${STATE}/topic-names") )
+	mapfile -t branch_names < "${STATE}/topic-names"
+
 	head="$(<"${STATE}/head")"
 
 	show_diff "${head}" "$(<"${STATE}/base")"
@@ -1411,7 +1416,7 @@ apply_to_topic() {
 	state=$(cat "${STATE}/distribute-state" 2>/dev/null)
 
 	echo
-	GIT_PAGER= ${GIT} log --oneline -1 "${rev}"
+	GIT_PAGER="" ${GIT} log --oneline -1 "${rev}"
 
 	while [ -z "${topic}" ]; do
 		local i=0 ret
@@ -1533,7 +1538,7 @@ update_topics() {
 	info
 	info "Updating ${target} topic branches for '${GIT_REMOTE}'..."
 	read -p "Press Enter to continue."
-	topics=( $(${GIT} show-ref | sed -r -n 's,.* refs/umpf/(.*),\1,p') )
+	mapfile -t topics < <(${GIT} show-ref | sed -r -n 's,.* refs/umpf/(.*),\1,p')
 	for topic in "${topics[@]}"; do
 		update_${target}_topic "${topic}"
 	done
@@ -1541,9 +1546,9 @@ update_topics() {
 
 run_distribute(){
 	local -a branches branch_names
-	branches=( $(<"${STATE}/topics") )
+	mapfile -t branches < "${STATE}/topics"
 	if ! ${IDENTICAL}; then
-		branch_names=( $(<"${STATE}/topic-names") )
+		mapfile -t branch_names < "${STATE}/topic-names"
 	fi
 
 	exec {patches_in}< "${STATE}/diff"
@@ -1585,6 +1590,7 @@ do_continue() {
 	prepare
 
 	test -f "${STATE}/command" || bailout "nothing to continue!"
+	# shellcheck source=/dev/null
 	. "${STATE}/config" || bailout "Failed to source '${STATE}/config'"
 
 	case "$(<"${STATE}/command")" in
