@@ -26,11 +26,6 @@ jobs:
     - name: Setup builddir
       run: meson setup builddir/
 
-    - name: Setup git
-      run: |
-        git config --global user.name "UMPF Test Committer"
-        git config --global user.email "umpf@example.com"
-
     - name: Run tests
       run: meson test -C builddir/
 

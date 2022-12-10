@@ -23,6 +23,8 @@ echo "---------------------------------------- preparing git repository"
 rm -rf "${BUILD_DIR:?}/${TEST}"
 git clone "${TEST_DIR}/test-git" "${BUILD_DIR}/${TEST}"
 cd "${BUILD_DIR}/${TEST}"
+git config --local user.name "UMPF Test Committer"
+git config --local user.email "umpf@example.com"
 git config --local advice.detachedHead false
 git branch a origin/a
 git branch b origin/b
