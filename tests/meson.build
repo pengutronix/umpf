@@ -4,7 +4,7 @@ test_env = [
   'TEST_DIR=' + meson.current_source_dir()
 ]
 
-run_test = files('run-test')
+run_test = find_program('run-test')
 
 tests = [
   'umpf-init',
