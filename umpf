@@ -1026,7 +1026,9 @@ rebase_end() {
 		s{
 		    \b(project\(
 		        (?<expr_comma>
-		            (?<expr>\s*
+		          (?<expr>
+		           (
+		            (?<expr_noternary>\s*
 		                ( (?<identifier>[a-zA-Z0-9_]++) # an identifier
 		                | ' [^']*+                     ' # a non-nested single quoted string
 		                | " [^"]*+                     " #              double
@@ -1042,7 +1044,10 @@ rebase_end() {
 		                    ) \)
 		                | \.                             # struct members etc.
 		                )*                               # function name + arguments etc.
-		            \s*),\s*
+		            \s*)
+		           | (?&expr_noternary) \? (?&expr_noternary) : (?&expr)
+		           )
+		          ),\s*
 		        )*+
 		        (
 		            (?!version[\s:])
