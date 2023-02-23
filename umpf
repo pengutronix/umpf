@@ -152,13 +152,13 @@ usage() {
 	  -i, --identical            use exact commit hashes, not tip of branches
 	  -s, --stable               create a 'stable' tag from a branch based on an
 	                             existing tag. Implies '--identical'.
-	  -b, --base=<base>          specify/override base name [default: merge base]
-	  -n, --name=<name>          specify/override umpf name
-	  -p, --patchdir=<path>      with format-patch: write patches to <path>/
-	      --relative=<path>      create patches relative to <path>
-	  -r, --remote=<remote>      use <remote> to resolve branch names
+	  -b, --base <base>          specify/override base name [default: merge base]
+	  -n, --name <name>          specify/override umpf name
+	  -p, --patchdir <path>      with format-patch: write patches to <path>/
+	      --relative <path>      create patches relative to <path>
+	  -r, --remote <remote>      use <remote> to resolve branch names
 	  -u, --update               with --patchdir: update existing patches in <path>
-	  -v, --version=<version>    with tag: overwrite version number [default: 1]
+	  -v, --version <version>    with tag: overwrite version number [default: 1]
 
 	Commands:
 	  diff <commit-ish>          show patches not in any topic branch (not

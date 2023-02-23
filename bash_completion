@@ -1,0 +1,62 @@
+#!/bin/bash
+
+_umpf_completion()
+{
+	local cmd _umpf_cmd
+	local -a completion_opts completion_cmds
+	_umpf_cmd="${COMP_WORDS[0]}"
+	completion_opts=( $(_parse_help umpf) )
+	completion_cmds=( $("${_umpf_cmd}" --help | sed -n 's/^  \([^ -][^ ]*\) .*$/\1/p') )
+	_init_completion -s || return
+
+	case "${prev}" in
+	--patchdir|-p)
+		_filedir -d
+		return 0
+		;;
+	--remote|-r)
+		COMPREPLY+=($( compgen -W  "$(git remote) refs/heads" -- $cur ) )
+		return 0
+		;;
+	*)
+		;;
+	esac
+	for (( i=1 ; i<${cword}; i++ )); do
+		local tmp="${words[i]}"
+		case "${tmp}" in
+		-p|-r)
+			i=$[i+1]
+			;;
+		-*)
+			;;
+		*)
+			cmd="${tmp}"
+			;;
+		esac
+	done
+	case ${cmd} in
+	"")
+		COMPREPLY=( $( compgen -W "${completion_cmds[*]} help" -- $cur ) )
+		;;
+	diff|show|tag|build)
+		local -a refs
+		refs=( $( compgen -W "$( git for-each-ref --format='%(refname:short)' refs/tags refs/heads refs/remotes)" -- $cur ) )
+		if [ ${#refs[@]} -eq 0 ]; then
+			COMPREPLY=( $( compgen -f -- $cur ) )
+			compopt -o filenames
+		else
+			COMPREPLY=( "${refs[@]}" )
+		fi
+		;;
+	merge)
+		COMPREPLY=( $( compgen -W "$( git for-each-ref --format='%(refname:short)' refs/heads refs/remotes)" -- $cur ) )
+		;;
+	format-patch)
+		COMPREPLY=( $( compgen -W "$( git for-each-ref --format='%(refname:short)' refs/tags)" -- $cur ) )
+		;;
+	esac
+	COMPREPLY+=( $( compgen -W "${completion_opts[*]}" -- $cur ) )
+	[[ $COMPREPLY == *= ]] && compopt -o nospace
+	return 0
+} &&
+complete -F _umpf_completion umpf

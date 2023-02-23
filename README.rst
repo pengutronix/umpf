@@ -36,6 +36,11 @@ Installation
 umpf is a bash script, so no installation is necessary. It just needs a few
 command line tools such as sed, grep and of course git.
 
+To enable bash completion, make sure umpf is in your ``$PATH``, then::
+
+    $ mkdir -p ~/.local/share/bash-completion/completions
+    $ ln -s /path/to/umpf/bash_completion ~/.local/share/bash-completion/completions/umpf
+
 Documentation
 =============
 
