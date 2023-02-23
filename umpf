@@ -1053,17 +1053,24 @@ rebase_end() {
 		            (?!version[\s:])
 		            (?&identifier)*\s*:(?&expr)\s*,\s*
 		        )*+                                      # all named arguments except 'version'
-		        version\s*:\s(?&expr)                    # 'version' argument
+		        version\s*:\s(?<version>(?&expr))        # 'version' argument
 		    )
 		}{\1 + '.${version}'}x
 		EOF
 		)"
-		perl -0777 -i -p -e "${prog}" "${meson_build}"
-		if grep -q 'gst_version_nano' "${meson_build}"; then
-			# our extra version is not the nano version
-			sed -i 's/\(if version_arr.length() ==\) 4/\1 5/' "${meson_build}"
+		version_arg="$(perl -0777 -n -e "${prog} && print $+{version}" "${meson_build}")"
+		version_file="$(sed -n "s/^files('\(.*\)')$/\1/p" <<<${version_arg})"
+		if [ -e "${version_file}" ]; then
+			sed -i "s/$/.${version}/" "${version_file}"
+			git add "${version_file}"
+		else
+			perl -0777 -i -p -e "${prog}" "${meson_build}"
+			if grep -q 'gst_version_nano' "${meson_build}"; then
+				# our extra version is not the nano version
+				sed -i 's/\(if version_arr.length() ==\) 4/\1 5/' "${meson_build}"
+			fi
+			git add "${meson_build}"
 		fi
-		git add "${meson_build}"
 		local doap_script=${GIT_RELATIVE:+${GIT_RELATIVE}/}scripts/extract-release-date-from-doap-file.py
 		local doap=( ${GIT_RELATIVE:+${GIT_RELATIVE}/}*.doap )
 		if [ -e "${doap_script}" ] && ls "${doap[@]}" &>/dev/null; then
