@@ -1010,6 +1010,10 @@ rebase_end() {
 
 		sed -i -r "s:^(EXTRAVERSION =.*)\$:\1-${version}:" Makefile
 		git add Makefile
+	elif grep -sq '^VERSION_STRING\s*:=' Makefile; then
+
+		sed -i -r "s;^(VERSION_STRING\s*:=.*)\$;\1-${version};" Makefile
+		git add Makefile
 	fi
 	if version_file="$(grep -l AC_INIT configure.* 2>/dev/null)"; then
 		perl -0777 -i -p -e "s/\b(AC_INIT\()(\[[^\]]*\]|[^),]*)(\s*,\s*)(\[[^\]]*|[^,]*)(\]?[^)]*\))/\1\2\3\4.${version}\5/" "${version_file}"
