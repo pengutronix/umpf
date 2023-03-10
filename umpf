@@ -1116,7 +1116,7 @@ create_tag() {
 	done
 	commit=$(${GIT} commit-tree "${tree}" -p HEAD ${parents} -m "${tagname}" -F "${STATE}/series.next")
 
-	if ${GIT} tag ${args} "${tagname}" "${commit}" >&2; then
+	if ${GIT} tag ${args} --cleanup=verbatim -F "${STATE}/series.next" "${tagname}" "${commit}" >&2; then
 		if ${GIT} tag ${args} --cleanup=verbatim -F "${STATE}/series.next" "${tagname}-flat" >&2; then
 			${GIT} checkout -q "${tagname}"
 		else
