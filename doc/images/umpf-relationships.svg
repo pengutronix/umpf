@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.0//EN" "http://www.w3.org/TR/2001/PR-SVG-20010719/DTD/svg10.dtd">
-<svg width="16cm" height="11cm" viewBox="-1 7 305 207" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<svg width="16cm" height="11cm" viewBox="-1 5 305 209" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
   <defs/>
   <g id="New layer 1"/>
   <g id="Background">
@@ -67,7 +67,7 @@
       </text>
     </g>
     <g>
-      <rect style="fill: #ffffff; fill-opacity: 1; stroke: none" x="228" y="15.35" width="33.25" height="5.3"/>
+      <rect style="fill: #ffffff; fill-opacity: 1; stroke: none" x="228" y="15.35" width="33.39" height="5.3"/>
       <text font-size="4.51556" style="fill: #000000; fill-opacity: 1; stroke: none;text-anchor:start;font-family:sans-serif;font-style:italic;font-weight:normal" x="228" y="19.55">
         <tspan x="228" y="19.55">qualified umpf</tspan>
       </text>
@@ -79,7 +79,7 @@
       </text>
     </g>
     <g>
-      <rect style="fill: #ffffff; fill-opacity: 1; stroke: none" x="228" y="27.35" width="38.95" height="5.3"/>
+      <rect style="fill: #ffffff; fill-opacity: 1; stroke: none" x="228" y="27.35" width="39.09" height="5.3"/>
       <text font-size="4.51556" style="fill: #000000; fill-opacity: 1; stroke: none;text-anchor:start;font-family:sans-serif;font-style:italic;font-weight:normal" x="228" y="31.55">
         <tspan x="228" y="31.55">unqualified umpf</tspan>
       </text>
@@ -89,7 +89,7 @@
       <path style="fill: #ffffff; fill-opacity: 1; stroke-opacity: 1; stroke-width: 0.6; stroke: #000000" fill-rule="evenodd" d="M 212.3 42 C 212.3,41 213.3,40 214.3,40 C 215.3,40 216.3,41 216.3,42 C 216.3,43 215.3,44 214.3,44 C 213.3,44 212.3,43 212.3,42z"/>
     </g>
     <g>
-      <rect style="fill: #ffffff; fill-opacity: 1; stroke: none" x="228" y="39.35" width="44.9" height="5.3"/>
+      <rect style="fill: #ffffff; fill-opacity: 1; stroke: none" x="228" y="39.35" width="45.29" height="5.3"/>
       <text font-size="4.51556" style="fill: #000000; fill-opacity: 1; stroke: none;text-anchor:start;font-family:sans-serif;font-style:italic;font-weight:normal" x="228" y="43.55">
         <tspan x="228" y="43.55">possible entry point</tspan>
       </text>
@@ -99,7 +99,7 @@
       <polygon style="fill: #000000; fill-opacity: 1; stroke-opacity: 1; stroke-width: 0.6; stroke: #000000" fill-rule="evenodd" points="223.051,52 221.051,52.6667 221.551,52 221.051,51.3333 "/>
     </g>
     <g>
-      <rect style="fill: #ffffff; fill-opacity: 1; stroke: none" x="228" y="49.35" width="70.6" height="5.3"/>
+      <rect style="fill: #ffffff; fill-opacity: 1; stroke: none" x="228" y="49.35" width="70.99" height="5.3"/>
       <text font-size="4.51556" style="fill: #000000; fill-opacity: 1; stroke: none;text-anchor:start;font-family:sans-serif;font-style:italic;font-weight:normal" x="228" y="53.55">
         <tspan x="228" y="53.55">commands not asking for input</tspan>
       </text>
@@ -133,7 +133,7 @@
       <polygon style="fill: #000000; fill-opacity: 1; stroke-opacity: 1; stroke-width: 0.6; stroke: #000000" fill-rule="evenodd" points="223.051,62 221.051,62.6667 221.551,62 221.051,61.3333 "/>
     </g>
     <g>
-      <rect style="fill: #ffffff; fill-opacity: 1; stroke: none" x="228" y="59.35" width="61.8" height="5.3"/>
+      <rect style="fill: #ffffff; fill-opacity: 1; stroke: none" x="228" y="59.35" width="62.19" height="5.3"/>
       <text font-size="4.51556" style="fill: #000000; fill-opacity: 1; stroke: none;text-anchor:start;font-family:sans-serif;font-style:italic;font-weight:normal" x="228" y="63.55">
         <tspan x="228" y="63.55">commands asking for input</tspan>
       </text>
@@ -187,7 +187,7 @@
       </text>
     </g>
     <g>
-      <rect style="fill: #ffffff; fill-opacity: 1; stroke: none" x="76.759" y="163.05" width="54.15" height="9.9"/>
+      <rect style="fill: #ffffff; fill-opacity: 1; stroke: none" x="76.604" y="163.05" width="54.46" height="9.9"/>
       <text font-size="6.77333" style="fill: #000000; fill-opacity: 1; stroke: none;text-anchor:middle;font-family:sans-serif;font-style:italic;font-weight:normal" x="103.834" y="170.35">
         <tspan x="103.834" y="170.35">edit useries file</tspan>
       </text>
@@ -214,6 +214,16 @@
       <rect style="fill: #ffffff; fill-opacity: 1; stroke: none" x="6.3" y="191" width="59.4" height="9.9"/>
       <text font-size="6.77333" style="fill: #000000; fill-opacity: 1; stroke: none;text-anchor:middle;font-family:monospace;font-style:normal;font-weight:normal" x="36" y="198.3">
         <tspan x="36" y="198.3">init ./useries</tspan>
+      </text>
+    </g>
+    <g>
+      <path style="fill: none; stroke-opacity: 1; stroke-width: 0.6; stroke: #000000" d="M 110.008,29.6594 A 12.669,12.669 0 1 1 131.93,25.8912"/>
+      <polygon style="fill: #000000; fill-opacity: 1; stroke-opacity: 1; stroke-width: 0.6; stroke: #000000" fill-rule="evenodd" points="129.935,29.6122 131.614,23.1175 132.89,26.2191 136.138,27.0586 "/>
+    </g>
+    <g>
+      <rect style="fill: #ffffff; fill-opacity: 1; stroke: none" x="112.3" y="4.60809" width="13.55" height="9.45"/>
+      <text font-size="6.4" style="fill: #000000; fill-opacity: 1; stroke: none;text-anchor:start;font-family:monospace;font-style:normal;font-weight:normal" x="113.3" y="11.5487">
+        <tspan x="113.3" y="11.5487">tag</tspan>
       </text>
     </g>
   </g>
