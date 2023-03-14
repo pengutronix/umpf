@@ -397,6 +397,57 @@ The ``series`` file in that repository is now a fully qualified useries,
 and can be used to recreate the *utag* in Git.
 
 
+Updating an *utag*
+------------------
+
+Using the metadata from an already existing tag - ``5.0/special-customer-release/190311-1`` for example -
+umpf can be instructed to create a fresh *utag* based on the previous metadata::
+
+   ~/linux ((5.0/special-customer-release/20190311-1)) $  umpf tag 5.0/special-customer-release/190311-1
+
+    # umpf-base: v5.0
+    # umpf-name: 5.0/special-customer-release
+    # umpf-version: 5.0/special-customer-release/20230309-1
+    umpf: Remote undefined. Choose the branch with the correct remote:
+    0) v5.0/topic/fixes
+    branch number: 0
+    umpf: Using remote 'refs/heads/'.
+    # umpf-topic: v5.0/topic/fixes
+    # umpf-hashinfo: 1ad3cc4c7d974311f5f5a2e55d69be15fdf917cd
+    # umpf-topic-range: 1c163f4c7b3f621efff9b28a47abb36f7378d783..1ad3cc4c7d974311f5f5a2e55d69be15fdf917cd
+    # umpf-topic: v5.0/topic/more-fixes
+    # umpf-hashinfo: 157d32af153309246d7cc8a4f283299d751d6077
+    # umpf-topic-range: 1ad3cc4c7d974311f5f5a2e55d69be15fdf917cd..8bae5bbec8cb4599c141405e9755b7c0e42e064f
+    [detached HEAD 0b1994336c1a] Release 5.0/special-customer-release/20190311-1
+     1 file changed, 1 insertion(+), 1 deletion(-)
+    # umpf-release: 5.0/special-customer-release/20230309-1
+    # umpf-topic-range: 8bae5bbec8cb4599c141405e9755b7c0e42e064f..19cdc2b857e662a38c712b41ce610000a5ddc6ae
+    # umpf-end
+
+Or tell umpf to rebase onto a new *umpf-base* when creating a fresh *utag*::
+
+   ~/linux ((5.0/special-customer-release/20190311-1)) $  umpf tag --base=v5.0.42 --version=2 5.0/special-customer-release/190311-1
+
+    # umpf-base: v5.0.42
+    # umpf-name: 5.0/special-customer-release
+    # umpf-version: 5.0/special-customer-release/20230309-2
+    umpf: Remote undefined. Choose the branch with the correct remote:
+    0) v5.0/topic/fixes
+    branch number: 0
+    umpf: Using remote 'refs/heads/'.
+    # umpf-topic: v5.0/topic/fixes
+    # umpf-hashinfo: 1ad3cc4c7d974311f5f5a2e55d69be15fdf917cd
+    # umpf-topic-range: 1c163f4c7b3f621efff9b28a47abb36f7378d783..1ad3cc4c7d974311f5f5a2e55d69be15fdf917cd
+    # umpf-topic: v5.0/topic/more-fixes
+    # umpf-hashinfo: 157d32af153309246d7cc8a4f283299d751d6077
+    # umpf-topic-range: 1ad3cc4c7d974311f5f5a2e55d69be15fdf917cd..8bae5bbec8cb4599c141405e9755b7c0e42e064f
+    [detached HEAD e865032e1b9b] Release 5.0/special-customer-release/20190311-2
+     1 file changed, 1 insertion(+), 1 deletion(-)
+    # umpf-release: 5.0/special-customer-release/20230309-2
+    # umpf-topic-range: 8bae5bbec8cb4599c141405e9755b7c0e42e064f..19cdc2b857e662a38c712b41ce610000a5ddc6ae
+    # umpf-end
+
+
 Overview
 --------
 
