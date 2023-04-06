@@ -462,7 +462,7 @@ show_diff() {
 	all=( "${head}" "^${base}" "${branches[@]/#/^}" )
 	if [ -n "$(${GIT} rev-list --no-merges "${all[@]}")" ]; then
 		info
-		info "These patches are not in any topics branch:"
+		info "These patches are not in any topic branch:"
 		${GIT} rev-list --no-merges --oneline "${all[@]}"
 		${GIT} rev-list --no-merges --reverse "${all[@]}" > "${STATE}/diff"
 		info
