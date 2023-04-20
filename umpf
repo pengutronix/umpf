@@ -869,6 +869,10 @@ rebase_base() {
 	echo "$line" >&${series_out}
 	echo 1 > "${STATE}/num"
 	${GIT} checkout -q "${baserev}" || abort "checkout '${content}' failed"
+	if grep -sq "project('libcamera'," "meson.build"; then
+	    project="libcamera"
+	    VERSION_SEPARATOR="."
+	fi
 }
 
 rebase_name() {
@@ -1007,6 +1011,7 @@ rebase_end() {
 	local version="$(<"${STATE}/version")"
 	local version_file
 	local meson_build
+	local meson_extra
 	${GIT} rev-parse HEAD > "${STATE}/prev_head"
 	if grep -sq '^EXTRAVERSION =' Makefile; then
 
@@ -1028,6 +1033,14 @@ rebase_end() {
 		sed -i "s/@VCS_TAG@/\0.${version}/" src/version/version.h.in &&
 		git add src/version/version.h.in
 	elif [ -e "${meson_build}" ]; then
+		case "${project}" in
+		libcamera)
+			meson_extra="+${version}"
+			;;
+		*)
+			meson_extra=".${version}"
+			;;
+		esac
 		prog="$(cat <<- EOF
 		s{
 		    \b(project\(
@@ -1061,7 +1074,7 @@ rebase_end() {
 		        )*+                                      # all named arguments except 'version'
 		        version\s*:\s(?<version>(?&expr))        # 'version' argument
 		    )
-		}{\1 + '.${version}'}x
+		}{\1 + '${meson_extra}'}x
 		EOF
 		)"
 		version_arg="$(perl -0777 -n -e "${prog} && print $+{version}" "${meson_build}")"
