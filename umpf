@@ -36,7 +36,8 @@ STABLE=false
 FORCE=false
 UPDATE=false
 VERBOSE=false
-VERSION=-1
+VERSION_SEPARATOR=-
+VERSION=1
 AUTO_RERERE=false
 BLOCK_SIZE=100
 BB=false
@@ -92,6 +93,7 @@ bailout() {
 		IDENTICAL="${IDENTICAL}"
 		STABLE="${STABLE}"
 		UPDATE="${UPDATE}"
+		VERSION_SEPARATOR="${VERSION_SEPARATOR}"
 		VERSION="${VERSION}"
 		EOF
 		if ${FORCE}; then
@@ -262,7 +264,7 @@ setup() {
 			shift
 			;;
 		-v|--version)
-			VERSION="-${1}"
+			VERSION="${1}"
 			shift
 			;;
 		--)
@@ -785,7 +787,7 @@ parse() {
 		line="# umpf-name: ${content}"
 		test -n "${content}" || bailout "${cmd} line without value"
 		test -e "${STATE}/name" && bailout "duplicate name line"
-		local version="$(date +%Y%m%d ${SOURCE_DATE_EPOCH:+--date=@${SOURCE_DATE_EPOCH}})${VERSION}"
+		local version="$(date +%Y%m%d ${SOURCE_DATE_EPOCH:+--date=@${SOURCE_DATE_EPOCH}})${VERSION_SEPARATOR}${VERSION}"
 		local name="${content}"
 		local tagname="${name}/${version}"
 		echo "${name}" > "${STATE}/name"
@@ -799,7 +801,7 @@ parse() {
 		test -n "${content}" || bailout "${cmd} line without value"
 		if ${STABLE}; then
 			local name="$(<"${STATE}/name")"
-			local version="$(sed "s;${name}/\([0-9]\{8\}\)-.*;\1${VERSION};" <<< "${content}")"
+			local version="$(sed "s;${name}/\([0-9]\{8\}\)-.*;\1${VERSION_SEPARATOR}${VERSION};" <<< "${content}")"
 			local tagname="${name}/${version}"
 			echo "${version}" > "${STATE}/version"
 			echo "${tagname}" > "${STATE}/tag"
