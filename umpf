@@ -36,7 +36,8 @@ STABLE=false
 FORCE=false
 UPDATE=false
 VERBOSE=false
-VERSION=-1
+VERSION_SEPARATOR=-
+VERSION=1
 AUTO_RERERE=false
 BLOCK_SIZE=100
 BB=false
@@ -92,6 +93,7 @@ bailout() {
 		IDENTICAL="${IDENTICAL}"
 		STABLE="${STABLE}"
 		UPDATE="${UPDATE}"
+		VERSION_SEPARATOR="${VERSION_SEPARATOR}"
 		VERSION="${VERSION}"
 		EOF
 		if ${FORCE}; then
@@ -262,7 +264,7 @@ setup() {
 			shift
 			;;
 		-v|--version)
-			VERSION="-${1}"
+			VERSION="${1}"
 			shift
 			;;
 		--)
@@ -785,7 +787,7 @@ parse() {
 		line="# umpf-name: ${content}"
 		test -n "${content}" || bailout "${cmd} line without value"
 		test -e "${STATE}/name" && bailout "duplicate name line"
-		local version="$(date +%Y%m%d ${SOURCE_DATE_EPOCH:+--date=@${SOURCE_DATE_EPOCH}})${VERSION}"
+		local version="$(date +%Y%m%d ${SOURCE_DATE_EPOCH:+--date=@${SOURCE_DATE_EPOCH}})${VERSION_SEPARATOR}${VERSION}"
 		local name="${content}"
 		local tagname="${name}/${version}"
 		echo "${name}" > "${STATE}/name"
@@ -799,7 +801,7 @@ parse() {
 		test -n "${content}" || bailout "${cmd} line without value"
 		if ${STABLE}; then
 			local name="$(<"${STATE}/name")"
-			local version="$(sed "s;${name}/\([0-9]\{8\}\)-.*;\1${VERSION};" <<< "${content}")"
+			local version="$(sed "s;${name}/\([0-9]\{8\}\)-.*;\1${VERSION_SEPARATOR}${VERSION};" <<< "${content}")"
 			local tagname="${name}/${version}"
 			echo "${version}" > "${STATE}/version"
 			echo "${tagname}" > "${STATE}/tag"
@@ -867,6 +869,10 @@ rebase_base() {
 	echo "$line" >&${series_out}
 	echo 1 > "${STATE}/num"
 	${GIT} checkout -q "${baserev}" || abort "checkout '${content}' failed"
+	if grep -sq "project('libcamera'," "meson.build"; then
+	    project="libcamera"
+	    VERSION_SEPARATOR="."
+	fi
 }
 
 rebase_name() {
@@ -1005,6 +1011,7 @@ rebase_end() {
 	local version="$(<"${STATE}/version")"
 	local version_file
 	local meson_build
+	local meson_extra
 	${GIT} rev-parse HEAD > "${STATE}/prev_head"
 	if grep -sq '^EXTRAVERSION =' Makefile; then
 
@@ -1026,6 +1033,14 @@ rebase_end() {
 		sed -i "s/@VCS_TAG@/\0.${version}/" src/version/version.h.in &&
 		git add src/version/version.h.in
 	elif [ -e "${meson_build}" ]; then
+		case "${project}" in
+		libcamera)
+			meson_extra="+${version}"
+			;;
+		*)
+			meson_extra=".${version}"
+			;;
+		esac
 		prog="$(cat <<- EOF
 		s{
 		    \b(project\(
@@ -1059,7 +1074,7 @@ rebase_end() {
 		        )*+                                      # all named arguments except 'version'
 		        version\s*:\s(?<version>(?&expr))        # 'version' argument
 		    )
-		}{\1 + '.${version}'}x
+		}{\1 + '${meson_extra}'}x
 		EOF
 		)"
 		version_arg="$(perl -0777 -n -e "${prog} && print $+{version}" "${meson_build}")"
@@ -1680,4 +1695,3 @@ else
 	usage
 	exit 1
 fi
-
