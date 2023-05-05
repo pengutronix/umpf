@@ -1608,6 +1608,13 @@ do_distribute() {
 	echo "${SERIES}" > "${STATE}/head"
 	parse_series diff "${STATE}/series"
 
+	if [ ! -e "${STATE}/diff" ]; then
+		info
+		info "No new patches to distribute"
+		cleanup
+		return
+	fi
+
 	if ${IDENTICAL} && [ ! -e "${STATE}/topics" ]; then
 		abort "Identical diff requires series with 'hashinfo'"
 	fi
