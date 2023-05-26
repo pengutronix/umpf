@@ -391,7 +391,11 @@ find_branch_rev() {
 			info "Warning: The following commits are in '${branch}' but not in '${remote}${name}':"
 			GIT_PAGER="" ${GIT} log --oneline "${reply}...${b}"
 			if tty -s; then
-				read -p "Press Enter to continue."
+				local choice=""
+				read -e -i n -p "Use ${branch} instead? [y/n]: " choice
+				if [ "${choice}" == "y" ]; then
+					reply="${branch}"
+				fi
 			fi
 		fi
 	done
