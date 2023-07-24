@@ -16,15 +16,27 @@ reproduce an umpf!
 Use ``--identical`` only for specific branches (but use tip-of-head for others)
 -------------------------------------------------------------------------------
 
-Currently, ``--identical`` will always use the hashinfo for all branches.
+By default, ``--identical`` will always use the hashinfo for all branches.
+This can be overridden case by case with the ``--override`` option.
+For example, to use the local state of only the ``v4.19/topic/imx-poweroff``
+branch, but use ``acme`` remote for everything else::
 
-Workround 1: reset all local topic branches that are included in the umpf to their
-desired commit, then let umpf prompt for the remote for every single branch
-(see above), and select the local branch.
+  umpf --identical --remote acme --override v4.19/topic/imx-poweroff build series
 
-Workaround 2: If the same state is needed on future umpfs (e.g. with stable workflows),
-create a separate branch in the ``vX.Y/customers/`` namespace on the desired commit,
-which you can then refer to in your *useries* file or with ``umpf merge``.
+In cases, where the local branch is named differently, this can be made
+explicit::
+
+  umpf --identical --remote acme --override \
+    v4.19/topic/imx-poweroff=v4.19/topic/poweroff-rework build series
+
+Normally, this state is needed for future umpfs and thus ``--override`` should
+be a temporary measure until the remote branches are updated and future
+umpfs yield the same result without ``--override``.
+
+If the topic branches are shared between different project and a branch needs
+to be stabilized, a separate branch in the ``vX.Y/customers/`` namespace can
+be created pointing at the desired commit.
+This can then be referred to in the *useries* file or with ``umpf merge``.
 Example (with ``umpf-topic: v4.19/customers/foobar/topic/imx-poweroff``)::
 
   $ git log --oneline --decorate ${base}^..origin/v4.19/topic/imx-poweroff
@@ -35,5 +47,5 @@ Example (with ``umpf-topic: v4.19/customers/foobar/topic/imx-poweroff``)::
   * ba0390a910e7 ARM: imx6q: provide documentation for new fsl,pmic-stby-poweroff property
   * c63ee2939dc1 (tag: v4.19.85) Linux 4.19.85
 
-This way you are independent of future updates of the
+This way renewed umpfs are independent of future updates of the
 ``v4.19/topic/imx-poweroff`` topic branch.

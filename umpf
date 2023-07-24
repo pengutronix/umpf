@@ -41,6 +41,7 @@ VERSION=1
 AUTO_RERERE=false
 BLOCK_SIZE=100
 BB=false
+declare -A OVERRIDES
 
 # Create a pristine environment to minimize unnecessary fuzz when different
 # users use umpf on the same patch stack. That is, don't load any config files,
@@ -99,6 +100,7 @@ bailout() {
 		if ${FORCE}; then
 			echo "FORCE=true" >> "${STATE}/config"
 		fi
+		declare -p OVERRIDES >> "${STATE}/config"
 	fi
 
 	if [ -n "$*" ]; then
@@ -159,6 +161,11 @@ usage() {
 	  -p, --patchdir <path>      with format-patch: write patches to <path>/
 	      --relative <path>      create patches relative to <path>
 	  -r, --remote <remote>      use <remote> to resolve branch names
+	      --override <topic>[=<commit-ish>]
+	                             use commit-ish instead for the topic. May be
+				     specified more than once. If only <topic> is
+				     specified, it's interpreted as
+				     <topic>=<remote>/<topic>
 	  -u, --update               with --patchdir: update existing patches in <path>
 	  -v, --version <version>    with tag: overwrite version number [default: 1]
 
@@ -191,7 +198,7 @@ EOF
 ### setup ###
 
 setup() {
-	local tmp args o l
+	local tmp args o l topic commitish
 	if tmp="$(git config umpf.patch-dir)"; then
 		PATCH_DIR="${tmp}"
 	fi
@@ -206,7 +213,7 @@ setup() {
 	fi
 
 	o="fhisub:n:p:r:v:"
-	l="auto-rerere,bb,force,help,identical,stable,update,base:,name:,patchdir:,relative:,remote:,version:"
+	l="auto-rerere,bb,force,help,identical,stable,update,base:,name:,patchdir:,relative:,override:,remote:,version:"
 	if ! args="$(getopt -n umpf -o "${o}" -l "${l}" -- "${@}")"; then
 		usage
 		exit 1
@@ -263,6 +270,15 @@ setup() {
 			GIT_REMOTE="${1}"
 			shift
 			;;
+		--override)
+			IFS="=" read -r topic commitish <<< "${1}"
+			if [ -n "${commitish}" ]; then
+				OVERRIDES[$topic]="${commitish}"
+			else
+				OVERRIDES[$topic]=""
+			fi
+			shift
+			;;
 		-v|--version)
 			VERSION="${1}"
 			shift
@@ -288,6 +304,21 @@ setup() {
 	if [ -n "${GIT_FALLBACK_REMOTE}" ]; then
 		GIT_FALLBACK_REMOTE="${GIT_FALLBACK_REMOTE}/"
 	fi
+
+	for topic in "${!OVERRIDES[@]}"; do
+		local rev
+
+		if [ -z "${OVERRIDES[$topic]}" ]; then
+			OVERRIDES[$topic]="${GIT_REMOTE}/${topic}"
+		fi
+
+		if ! rev="$(${GIT} rev-parse "${OVERRIDES[$topic]}^{}" 2> /dev/null)"; then
+			echo "Revision '${OVERRIDES[$topic]}' not found for topic '${topic}'"
+			exit 1
+		fi
+
+		OVERRIDES[$topic]="${rev}"
+	done
 }
 
 prepare() {
@@ -341,6 +372,10 @@ find_branch_rev() {
 	local name branch remote
 	local -a branches replies
 	name="${1}"
+	if [ -n "${OVERRIDES[$name]}" ]; then
+	        reply="${OVERRIDES[$name]}"
+		return
+	fi
 	if ${IDENTICAL}; then
 		reply="${2}"
 		return
