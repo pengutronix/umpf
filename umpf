@@ -394,7 +394,7 @@ find_branch_rev() {
 				local choice=""
 				read -e -i n -p "Use ${branch} instead? [y/n]: " choice
 				if [ "${choice}" == "y" ]; then
-					reply="${branch}"
+					reply="${b}"
 				fi
 			fi
 		fi
