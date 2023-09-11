@@ -74,7 +74,7 @@ This form of plain *useries* is an unqualified form of umpf,
 and we need to transform it into another form to make it qualified.
 
 Why is this form of *useries* unqualified?
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Suppose you want to create a patch stack from the above *useries* file.
 Creating a patch stack is done with umpf's *format-patch* command.
@@ -99,7 +99,7 @@ Therefore we must first preprocess our *useries* into a form that
 contains information about the linear commits.
 
 Transforming a *useries* into a *umerge*
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 From this *useries* file, we can now build a *umerge*::
 
