@@ -30,6 +30,7 @@ GIT_FALLBACK_REMOTE=""
 SERIES=""
 BASE=""
 NAME=""
+FLAGS=""
 PATCH_DIR="umpf-patches"
 IDENTICAL=false
 STABLE=false
@@ -76,6 +77,15 @@ GIT_DIR="${GIT_DIR:-$(${GIT} rev-parse --git-dir 2> /dev/null)}"
 GIT_DIR="${GIT_DIR:-.git}"
 STATE="${GIT_DIR}/umpf"
 
+### flags ####
+SUPPORTED_FLAGS=("extraversion")
+
+declare -A flag_extraversion
+
+flag_extraversion[val]="replace"
+flag_extraversion[values]="replace conflictfree"
+##############
+
 info() {
 	if [ -z "$*" ]; then
 		echo >&2
@@ -94,6 +104,7 @@ bailout() {
 		IDENTICAL="${IDENTICAL}"
 		STABLE="${STABLE}"
 		UPDATE="${UPDATE}"
+		FLAGS="${FLAGS}"
 		VERSION_SEPARATOR="${VERSION_SEPARATOR}"
 		VERSION="${VERSION}"
 		EOF
@@ -153,6 +164,7 @@ usage() {
 	      --bb                   with format-patch: write patch series for bitbake
 	  -h, --help
 	  -f, --force
+	      --flags                specify/override umpf-flags
 	  -i, --identical            use exact commit hashes, not tip of branches
 	  -s, --stable               create a 'stable' tag from a branch based on an
 	                             existing tag. Implies '--identical'.
@@ -213,7 +225,7 @@ setup() {
 	fi
 
 	o="fhisub:n:p:r:v:"
-	l="auto-rerere,bb,force,help,identical,stable,update,base:,name:,patchdir:,relative:,override:,remote:,version:"
+	l="auto-rerere,bb,flags:,force,help,identical,stable,update,base:,name:,patchdir:,relative:,override:,remote:,version:"
 	if ! args="$(getopt -n umpf -o "${o}" -l "${l}" -- "${@}")"; then
 		usage
 		exit 1
@@ -235,6 +247,10 @@ setup() {
 			;;
 		-f|--force)
 			FORCE=true
+			;;
+		--flags)
+			FLAGS="${1}"
+			shift
 			;;
 		-h|--help)
 			usage
@@ -731,6 +747,35 @@ check_topic_range() {
 	echo "topic-range" >> "${STATE}/check"
 }
 
+verify_flag() {
+	local flag validval=0
+
+	flag=flag_$flagname
+	declare -p ${flag} &>/dev/null || abort "Unknown umpf-flag: ${flagname} (supported flags: ${SUPPORTED_FLAGS[*]})"
+
+	declare -n flag
+	for v in ${flag[values]}; do
+		[ "${v}" != "${flagval}" ] && continue
+
+		# shellcheck disable=SC2154
+		flag[val]="${v}"
+		validval=1
+	done
+
+	[ ${validval} -eq 1 ] || abort "Invalid umpf-flag value: ${flagval} (allowed values: ${flag[values]})!"
+}
+
+check_flags() {
+	local flagval flagname
+
+	for keyval in ${content}; do
+		flagname=${keyval%%=*}
+		flagval=${keyval#*=}
+
+		verify_flag
+	done
+}
+
 check_end() {
 	verify_topic
 	echo "end" > "${STATE}/check"
@@ -810,6 +855,20 @@ parse() {
 			content="${GIT_RELATIVE}"
 			line="# umpf-relative: ${content}"
 			do_exec relative
+		fi
+
+		if [ -n "${FLAGS}" ]; then
+			echo "${line}"  >> "${STATE}/done"
+			content="${FLAGS}"
+			line="# umpf-flags: ${content}"
+			do_exec flags
+		fi
+		;;
+	flags)
+		${has_base} || bailout "${cmd} before base"
+		test -n "${content}" || bailout "${cmd} line without value"
+		if [ -z "${FLAGS}" ]; then
+			do_exec flags
 		fi
 		;;
 	relative)
@@ -1046,6 +1105,10 @@ rebase_hashinfo() {
 	fi
 }
 
+rebase_flags() {
+	echo "$line" >&${series_out}
+}
+
 rebase_end() {
 	local version="$(<"${STATE}/version")"
 	local version_file
@@ -1054,7 +1117,11 @@ rebase_end() {
 	${GIT} rev-parse HEAD > "${STATE}/prev_head"
 	if grep -sq '^EXTRAVERSION =' Makefile; then
 
-		sed -i -r "s:^(EXTRAVERSION =.*)\$:\1-${version}:" Makefile
+		if [ ${flag_extraversion[val]} == "conflictfree" ]; then
+			sed -i -r "s;^(KERNELRELEASE =.*)\$;EXTRAVERSION := \$(EXTRAVERSION)-${version}\n\1;" Makefile
+		else
+			sed -i -r "s:^(EXTRAVERSION =.*)\$:\1-${version}:" Makefile
+		fi
 		git add Makefile
 	elif grep -sq '^VERSION_STRING\s*:=' Makefile; then
 
@@ -1274,6 +1341,10 @@ format_patch_topic_range() {
 	num="$((num + $(${GIT} rev-list "${range}" | wc -l)))"
 	num="$((((num-2)/${BLOCK_SIZE}+1)*${BLOCK_SIZE}+1))"
 	echo "${num}" > "${STATE}/num"
+}
+
+format_patch_flags() {
+	echo "$line" >&${series_out}
 }
 
 format_patch_end() {
@@ -1718,6 +1789,9 @@ do_init() {
 	echo "# umpf-base: ${BASE}" >> "${SERIES}"
 	if [ -n "${GIT_RELATIVE}" ]; then
 		echo "# umpf-relative: ${GIT_RELATIVE}" >> "${SERIES}"
+	fi
+	if [ -n "${FLAGS}" ]; then
+		echo "# umpf-flags: ${FLAGS}" >> "${series}"
 	fi
 	if [ -z "${NAME}" ]; then
 		read -e -p "name: " NAME
