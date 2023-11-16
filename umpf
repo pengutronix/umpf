@@ -590,12 +590,19 @@ import_series() {
 	base_rev="$(${GIT} merge-base "${base_rev}^1" "${base_rev}^2")"
 	exec {revlistfd}< <(${GIT} rev-list --merges --topo-order --parents "${base_rev}...${import}")
 	while read head base merges <&${revlistfd}; do
-		local magic base name
+		local magic base name flags
 		exec {localfd}< <(${GIT} notes show "${head}" 2>/dev/null)
+		# Reading git notes must be in sync with run_build()
 		while read magic base name <&${localfd}; do
 			if [ "${magic}" = "umpf-build-note:" ]; then
 				BASE="${BASE:-${base}}"
 				NAME="${NAME:-${name}}"
+				break
+			fi
+		done
+		while read magic flags <&${localfd}; do
+			if [ "${magic}" = "umpf-build-flags:" ]; then
+				FLAGS="${FLAGS:-${flags}}"
 				break
 			fi
 		done
@@ -861,6 +868,7 @@ parse() {
 			echo "${line}"  >> "${STATE}/done"
 			content="${FLAGS}"
 			line="# umpf-flags: ${content}"
+			echo "${content}" > "${STATE}/flags"
 			do_exec flags
 		fi
 		;;
@@ -868,6 +876,7 @@ parse() {
 		${has_base} || bailout "${cmd} before base"
 		test -n "${content}" || bailout "${cmd} line without value"
 		if [ -z "${FLAGS}" ]; then
+			echo "${content}" > "${STATE}/flags"
 			do_exec flags
 		fi
 		;;
@@ -1481,6 +1490,7 @@ build_hashinfo() {
 run_build() {
 	parse_series build "${STATE}/series"
 	${GIT} notes add -m "umpf-build-note: $(<"${STATE}/base-name") $(<"${STATE}/name")"
+	[ -f "${STATE}/flags" ] && ${GIT} notes append -m "umpf-build-flags: $(<"${STATE}/flags")"
 
 	cleanup
 }
