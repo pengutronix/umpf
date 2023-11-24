@@ -1490,7 +1490,9 @@ build_hashinfo() {
 run_build() {
 	parse_series build "${STATE}/series"
 	${GIT} notes add -m "umpf-build-note: $(<"${STATE}/base-name") $(<"${STATE}/name")"
-	[ -f "${STATE}/flags" ] && ${GIT} notes append -m "umpf-build-flags: $(<"${STATE}/flags")"
+	if [ -f "${STATE}/flags" ]; then
+		${GIT} notes append -m "umpf-build-flags: $(<"${STATE}/flags")"
+	fi
 
 	cleanup
 }
