@@ -1,4 +1,7 @@
 #! /usr/bin/env bash
+# We ignore the check SC2155 "Declare and assign separately to avoid masking
+# return values", as this reduced legibility and return values are ignored.
+# shellcheck disable=SC2155
 #
 # MIT License
 #
