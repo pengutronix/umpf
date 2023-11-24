@@ -104,7 +104,7 @@ bailout() {
 		IDENTICAL="${IDENTICAL}"
 		STABLE="${STABLE}"
 		UPDATE="${UPDATE}"
-		FLAGS="${FLAGS}"
+		FLAGS="$(<"${STATE}/flags")"
 		VERSION_SEPARATOR="${VERSION_SEPARATOR}"
 		VERSION="${VERSION}"
 		EOF
@@ -210,7 +210,7 @@ EOF
 ### setup ###
 
 setup() {
-	local tmp args o l topic commitish
+	local tmp args o l topic commitish content
 	if tmp="$(git config umpf.patch-dir)"; then
 		PATCH_DIR="${tmp}"
 	fi
@@ -319,6 +319,11 @@ setup() {
 	fi
 	if [ -n "${GIT_FALLBACK_REMOTE}" ]; then
 		GIT_FALLBACK_REMOTE="${GIT_FALLBACK_REMOTE}/"
+	fi
+
+	if [ -n "${FLAGS}" ] || [ -f "${STATE}/flags" ]; then
+		content=${FLAGS:-$(<"${STATE}/flags")}
+		check_flags
 	fi
 
 	for topic in "${!OVERRIDES[@]}"; do
