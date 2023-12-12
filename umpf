@@ -1,4 +1,4 @@
-#! /bin/bash
+#! /usr/bin/env bash
 #
 # MIT License
 #
@@ -492,7 +492,7 @@ find_branch_name() {
 		local i=0
 		for branch in "${branches[@]}"; do
 			nice_branch "${branch}"
-			echo "${i}) ${replies[1]:+[${replies[1]}]} ${replies[0]}"
+			info "${i}) ${replies[1]:+[${replies[1]}]} ${replies[0]}"
 			i=$((i+1))
 		done
 		while [ -z "${name}" ]; do
