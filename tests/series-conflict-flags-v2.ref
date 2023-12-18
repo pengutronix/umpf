@@ -1,0 +1,19 @@
+# umpf-base: base
+# umpf-flags: extraversion=conflictfree
+# umpf-name: name
+# umpf-version: name/20221209-2
+# umpf-topic: a2
+# umpf-hashinfo: 6506b50d0a42a5eeed04b56e5030c3f50dbf8aa4
+# umpf-topic-range: d306da785d874c09b89264d3f71632bc14bfe51f..ddf14744a866266139ecf7e230fbd3a65a4e811a
+# umpf-topic: a3
+# umpf-hashinfo: 274d14043e67e0c92f7d9d4992ef30ee6a1c6512
+# umpf-topic-range: ddf14744a866266139ecf7e230fbd3a65a4e811a..52ccdd4a588e7baa92abb6b1a298479f099f6c19
+# umpf-topic: b
+# umpf-hashinfo: 3755a03cf640725df1aeb13789cba87154a47b04
+# umpf-topic-range: 52ccdd4a588e7baa92abb6b1a298479f099f6c19..aa1baf2eb1ea70e2518874e854b92e05fca4922c
+# umpf-topic: version
+# umpf-hashinfo: 60fd5be2bc71ca066c3310c7eb6deb76f2921f73
+# umpf-topic-range: aa1baf2eb1ea70e2518874e854b92e05fca4922c..7e2e7ba24944ef5d610cdf257ccb6b5a195ec008
+# umpf-release: name/20221209-2
+# umpf-topic-range: 7e2e7ba24944ef5d610cdf257ccb6b5a195ec008..0d649d01047025444e729d20d07b35a5079f87cf
+# umpf-end

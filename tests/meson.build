@@ -17,6 +17,7 @@ tests = [
   'umpf-build-tag-identical',
   'umpf-series-tag-continue',
   'umpf-series-tag-rerere',
+  'umpf-series-tag-continue-flags',
   'umpf-format-patch',
   'umpf-format-patch-bb',
   'umpf-show',
