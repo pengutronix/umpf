@@ -1,0 +1,12 @@
+project(
+  'mesa',
+  ['c', 'cpp'],
+  version : run_command(
+    [find_program('python3', 'python'), 'bin/meson_get_version.py',
+     meson.version().version_compare('>= 0.56') ? meson.project_source_root() : meson.source_root()],
+    check : true
+  ).stdout() + '.20221209-2',
+  license : 'MIT',
+  meson_version : '>= 0.54',
+  default_options : ['buildtype=debugoptimized', 'b_ndebug=if-release', 'c_std=c11', 'cpp_std=c++17', 'rust_std=2021']
+)

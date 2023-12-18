@@ -1,0 +1,24 @@
+#!/bin/sh
+#
+# Test all the version substitution patterns
+#
+
+check_version() {
+	src="${1}"
+	dst="${2}"
+	ref="${TEST_DIR}/version-files/ref/$(basename ${src})"
+
+	${TEST_DIR}/prepare-version-branch "${src}" "${dst}"
+	echo | umpf tag -f --version=2 series --remote=origin
+	diff -u "${ref}" "${dst}"
+}
+
+sed -i '/^# umpf-topic: b$/a # umpf-topic: version' series
+export GIT_FALLBACK_REMOTE=refs/heads
+
+for file in "${TEST_DIR}/version-files/src/Makefile"*; do
+		check_version "${file}" "Makefile"
+done
+for file in "${TEST_DIR}/version-files/src/meson.build"*; do
+		check_version "${file}" "meson.build"
+done

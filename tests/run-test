@@ -49,6 +49,13 @@ EOF
 echo "---------------------------------------- running test \"${TEST}\""
 SOURCE_DATE_EPOCH="$(git log -1 --pretty=%ct umpf-tag)"
 export SOURCE_DATE_EPOCH
+export GIT_AUTHOR_DATE="${SOURCE_DATE_EPOCH}"
+export GIT_COMMITTER_DATE="${SOURCE_DATE_EPOCH}"
+export GIT_AUTHOR_MAIL="umpf@example.com"
+export GIT_AUTHOR_NAME="UMPF Test Committer"
+export GIT_COMMITTER_MAIL="umpf@example.com"
+export GIT_COMMITTER_NAME="UMPF Test Committer"
+export TZ="UTC"
 PATH="${SOURCE_ROOT}:${PATH}"
 set -x
 # shellcheck source=/dev/null
