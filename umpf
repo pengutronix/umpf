@@ -42,6 +42,7 @@ VERSION=1
 AUTO_RERERE=false
 BLOCK_SIZE=100
 BB=false
+NIX=false
 declare -A OVERRIDES
 
 # Create a pristine environment to minimize unnecessary fuzz when different
@@ -162,6 +163,7 @@ usage() {
 	Mandatory arguments to long options are mandatory for short options too.
 	      --auto-rerere          automatically try to use rerere after conflicts
 	      --bb                   with format-patch: write patch series for bitbake
+	      --nix                   with format-patch: write patch series nix
 	  -h, --help
 	  -f, --force
 	      --flags                specify/override umpf-flags
@@ -225,7 +227,7 @@ setup() {
 	fi
 
 	o="fhisub:n:p:r:v:"
-	l="auto-rerere,bb,flags:,force,help,identical,stable,update,base:,name:,patchdir:,relative:,override:,remote:,version:"
+	l="auto-rerere,bb,nix,flags:,force,help,identical,stable,update,base:,name:,patchdir:,relative:,override:,remote:,version:"
 	if ! args="$(getopt -n umpf -o "${o}" -l "${l}" -- "${@}")"; then
 		usage
 		exit 1
@@ -244,6 +246,9 @@ setup() {
 			;;
 		--bb)
 			BB=true
+			;;
+		--nix)
+			NIX=true
 			;;
 		-f|--force)
 			FORCE=true
@@ -1312,6 +1317,9 @@ format_patch_name() {
 
 format_patch_version() {
 	echo "$line" >&${series_out}
+	if ${NIX}; then
+		echo "[" >&${series_out}
+	fi
 }
 
 format_patch_release() {
@@ -1335,6 +1343,8 @@ filter_patches() {
 		echo 'SRC_URI += "\'
 		sed "s,^${STATE}/\(.*\)$,  file://\1 \\\\,"
 		echo '  "'
+	elif ${NIX}; then
+		sed "s,^${STATE}/patches/\(.*\)$,  ./\1,"
 	else
 		sed "s,^${STATE}/patches/,,"
 	fi
@@ -1357,6 +1367,9 @@ format_patch_flags() {
 }
 
 format_patch_end() {
+	if ${NIX}; then
+		echo "]" >&${series_out}
+	fi
 	echo "$line" >&${series_out}
 }
 
@@ -1406,6 +1419,8 @@ run_format_patch() {
 	done
 	if ${BB}; then
 		cp "${STATE}/series.next" "${PATCH_DIR}/series.inc"
+	elif ${NIX}; then
+		cp "${STATE}/series.next" "${PATCH_DIR}/series.nix"
 	else
 		cp "${STATE}/series.next" "${PATCH_DIR}/series"
 	fi
@@ -1423,6 +1438,8 @@ do_format_patch() {
 		SERIES="${SERIES:-${PATCH_DIR}/series}"
 		if ${BB}; then
 			OLD_SERIES="${PATCH_DIR}/series.inc"
+		elif ${NIX}; then
+			OLD_SERIES="${PATCH_DIR}/series.nix"
 		else
 			OLD_SERIES="${PATCH_DIR}/series"
 		fi
