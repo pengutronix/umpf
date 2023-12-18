@@ -22,6 +22,7 @@ if [ -z "$(command -v git)" ]; then fail "git not found in PATH"; fi
 echo "---------------------------------------- preparing git repository"
 rm -rf "${BUILD_DIR:?}/${TEST}"
 git clone "${TEST_DIR}/test-git" "${BUILD_DIR}/${TEST}"
+cp -r "${TEST_DIR}/rr-cache" "${BUILD_DIR}/${TEST}/.git/"
 cd "${BUILD_DIR}/${TEST}"
 git config --local user.name "UMPF Test Committer"
 git config --local user.email "umpf@example.com"
@@ -32,6 +33,15 @@ cat > series <<EOF
 # umpf-base: base
 # umpf-name: name
 # umpf-topic: a
+# umpf-topic: b
+# umpf-end
+EOF
+
+cat > series.conflict <<EOF
+# umpf-base: base
+# umpf-name: name
+# umpf-topic: a2
+# umpf-topic: a3
 # umpf-topic: b
 # umpf-end
 EOF
