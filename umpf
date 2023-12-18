@@ -115,6 +115,9 @@ bailout() {
 			echo "FORCE=true" >> "${STATE}/config"
 		fi
 		declare -p OVERRIDES >> "${STATE}/config"
+		for flag in "${SUPPORTED_FLAGS[@]}"; do
+			declare -p "flag_${flag}" >> "${STATE}/config"
+		done
 	fi
 
 	if [ -n "$*" ]; then
