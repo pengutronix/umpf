@@ -1,0 +1,12 @@
+#!/bin/sh
+#
+# Test creating an umpf tag from a series file with "umpf tag".
+#
+
+umpf tag --version=3 series.conflict --remote=origin || test $? = 1
+diff -u ${TEST_DIR}/conflict-failed.ref .git/umpf/failed
+git add a.txt
+umpf continue
+
+git log --format=%B -n 1 | grep "^# umpf-" > series.tag
+diff -u ${TEST_DIR}/series-conflict-v3.ref series.tag

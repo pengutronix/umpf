@@ -1,4 +1,7 @@
 #! /usr/bin/env bash
+# We ignore the check SC2155 "Declare and assign separately to avoid masking
+# return values", as this reduced legibility and return values are ignored.
+# shellcheck disable=SC2155
 #
 # MIT License
 #
@@ -113,6 +116,9 @@ bailout() {
 			echo "FORCE=true" >> "${STATE}/config"
 		fi
 		declare -p OVERRIDES >> "${STATE}/config"
+		for flag in "${SUPPORTED_FLAGS[@]}"; do
+			declare -p "flag_${flag}" >> "${STATE}/config"
+		done
 	fi
 
 	if [ -n "$*" ]; then
@@ -312,6 +318,10 @@ setup() {
 	COMMAND="${1}"
 	shift
 	ARGS=( "${@}" )
+
+	if [[ -n "${GIT_RELATIVE}" && ! "${COMMAND}" =~ ^(init|build|tag)$ ]]; then
+		bailout "--relative is only valid for 'init', 'build' and 'tag'"
+	fi
 
 	test -n "${PATCH_DIR}" || bailout "Patch directory not defined"
 	if [ "${PATCH_DIR}" == "${PATCH_DIR#/}" ]; then
@@ -595,21 +605,22 @@ import_series() {
 	base_rev="$(${GIT} merge-base "${base_rev}^1" "${base_rev}^2")"
 	exec {revlistfd}< <(${GIT} rev-list --merges --topo-order --parents "${base_rev}...${import}")
 	while read head base merges <&${revlistfd}; do
-		local magic base name flags
+		local magic base name
 		exec {localfd}< <(${GIT} notes show "${head}" 2>/dev/null)
 		# Reading git notes must be in sync with run_build()
-		while read magic base name <&${localfd}; do
-			if [ "${magic}" = "umpf-build-note:" ]; then
-				BASE="${BASE:-${base}}"
-				NAME="${NAME:-${name}}"
-				break
-			fi
-		done
-		while read magic flags <&${localfd}; do
-			if [ "${magic}" = "umpf-build-flags:" ]; then
-				FLAGS="${FLAGS:-${flags}}"
-				break
-			fi
+		while read magic value <&${localfd}; do
+			case "${magic}" in
+				umpf-build-note:)
+					BASE="${BASE:-${value% *}}"
+					NAME="${NAME:-${value#* }}"
+					;;
+				umpf-build-flags:)
+					FLAGS="${FLAGS:-${value}}"
+					;;
+				umpf-build-relative:)
+					GIT_RELATIVE="${GIT_RELATIVE:-${value}}"
+					;;
+			esac
 		done
 		exec {localfd}<&-
 		if [[ -n "${BASE}" && -n "${NAME}" ]]; then
@@ -873,7 +884,6 @@ parse() {
 			echo "${line}"  >> "${STATE}/done"
 			content="${FLAGS}"
 			line="# umpf-flags: ${content}"
-			echo "${content}" > "${STATE}/flags"
 			do_exec flags
 		fi
 		;;
@@ -881,7 +891,6 @@ parse() {
 		${has_base} || bailout "${cmd} before base"
 		test -n "${content}" || bailout "${cmd} line without value"
 		if [ -z "${FLAGS}" ]; then
-			echo "${content}" > "${STATE}/flags"
 			do_exec flags
 		fi
 		;;
@@ -1507,7 +1516,12 @@ build_hashinfo() {
 run_build() {
 	parse_series build "${STATE}/series"
 	${GIT} notes add -m "umpf-build-note: $(<"${STATE}/base-name") $(<"${STATE}/name")"
-	[ -f "${STATE}/flags" ] && ${GIT} notes append -m "umpf-build-flags: $(<"${STATE}/flags")"
+	if [ -f "${FLAGS}" ]; then
+		${GIT} notes append -m "umpf-build-flags: $(<"${FLAGS}")"
+	fi
+	if [ -n "${GIT_RELATIVE}" ]; then
+		${GIT} notes append -m "umpf-build-relative: ${GIT_RELATIVE}"
+	fi
 
 	cleanup
 }

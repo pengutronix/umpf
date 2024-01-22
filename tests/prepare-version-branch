@@ -1,0 +1,14 @@
+#!/bin/sh
+#
+# prepare a version branch to test version substitution
+#
+
+set -e
+
+src="${1}"
+dst="${2:-$(basename ${src})}"
+
+git checkout -B version base
+cp "${src}" "${dst}"
+git add "${dst}"
+git commit -m "version"

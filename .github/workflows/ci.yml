@@ -13,7 +13,7 @@ jobs:
       uses: actions/checkout@v3
 
     - name: Run shellcheck
-      run: shellcheck -S warning -e SC2155 umpf
+      run: shellcheck -S warning umpf
 
     - name: Setup Python
       uses: actions/setup-python@v4

@@ -22,6 +22,7 @@ if [ -z "$(command -v git)" ]; then fail "git not found in PATH"; fi
 echo "---------------------------------------- preparing git repository"
 rm -rf "${BUILD_DIR:?}/${TEST}"
 git clone "${TEST_DIR}/test-git" "${BUILD_DIR}/${TEST}"
+cp -r "${TEST_DIR}/rr-cache" "${BUILD_DIR}/${TEST}/.git/"
 cd "${BUILD_DIR}/${TEST}"
 git config --local user.name "UMPF Test Committer"
 git config --local user.email "umpf@example.com"
@@ -36,9 +37,25 @@ cat > series <<EOF
 # umpf-end
 EOF
 
+cat > series.conflict <<EOF
+# umpf-base: base
+# umpf-name: name
+# umpf-topic: a2
+# umpf-topic: a3
+# umpf-topic: b
+# umpf-end
+EOF
+
 echo "---------------------------------------- running test \"${TEST}\""
 SOURCE_DATE_EPOCH="$(git log -1 --pretty=%ct umpf-tag)"
 export SOURCE_DATE_EPOCH
+export GIT_AUTHOR_DATE="${SOURCE_DATE_EPOCH}"
+export GIT_COMMITTER_DATE="${SOURCE_DATE_EPOCH}"
+export GIT_AUTHOR_MAIL="umpf@example.com"
+export GIT_AUTHOR_NAME="UMPF Test Committer"
+export GIT_COMMITTER_MAIL="umpf@example.com"
+export GIT_COMMITTER_NAME="UMPF Test Committer"
+export TZ="UTC"
 PATH="${SOURCE_ROOT}:${PATH}"
 set -x
 # shellcheck source=/dev/null

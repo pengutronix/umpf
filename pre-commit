@@ -15,14 +15,12 @@ EOF
 	exit 1
 fi
 
-# We ignore the check SC2155 "Declare and assign separately to avoid masking
-# return values", as this reduced legibility and return values are ignored.
-if ! shellcheck -S warning -e SC2155 umpf; then
+if ! shellcheck -S warning umpf; then
 	cat <<EOF
 
 Error: Commit aborted in pre-commit hook due to shellcheck warnings.
 
-Please make sure "shellcheck -S warning -e SC2155 umpf" reports no warnings before trying to commit.
+Please make sure "shellcheck -S warning umpf" reports no warnings before trying to commit.
 EOF
 	exit 1
 fi

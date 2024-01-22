@@ -1,0 +1,27 @@
+#!/bin/sh
+#
+# Test flags propagation across "umpf continue"
+#
+
+${TEST_DIR}/prepare-version-branch "${TEST_DIR}/version-files/src/Makefile"
+
+sed -i '/^# umpf-topic: b$/a # umpf-topic: version' series.conflict
+export GIT_FALLBACK_REMOTE=refs/heads
+
+umpf tag --version=2 series.conflict --remote=origin --flags extraversion=conflictfree || test $? = 1
+git add a.txt
+echo | umpf continue
+
+diff -u ${TEST_DIR}/version-files/ref/Makefile.conflictfree Makefile
+git log --format=%B -n 1 | grep "^# umpf-" > series.tag
+diff -u ${TEST_DIR}/series-conflict-flags-v2.ref series.tag
+
+sed -i '/^# umpf-base: base$/a # umpf-flags: extraversion=conflictfree' series.conflict
+umpf tag -f --version=2 series.conflict --remote=origin || test $? = 1
+git add a.txt
+echo | umpf continue
+umpf show 2>&1
+
+diff -u ${TEST_DIR}/version-files/ref/Makefile.conflictfree Makefile
+git log --format=%B -n 1 | grep "^# umpf-" > series.tag
+diff -u ${TEST_DIR}/series-conflict-flags-v2.ref series.tag
