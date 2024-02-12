@@ -49,3 +49,16 @@ Example (with ``umpf-topic: v4.19/customers/foobar/topic/imx-poweroff``)::
 
 This way renewed umpfs are independent of future updates of the
 ``v4.19/topic/imx-poweroff`` topic branch.
+
+Create branches based on other branches
+---------------------------------------
+
+Sometimes it is necessary to separate changes from an existing branch into
+specfific bits for a single project. These changes should not be applied to all
+projects, but are necessary changes for this project to work. Additionally they
+are usually based on previous changes from another branch.
+
+To ensure that ``umpf tag`` is able to resolve the branch dependencies, the
+required base branch needs to be merged in via ``umpf merge`` to ensure that the
+merge commit contains the correct ``umpf-merge-topic`` line. This way umpf can
+rebase your branch correctly during a tag operation.
