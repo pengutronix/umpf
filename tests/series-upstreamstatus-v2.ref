@@ -1,0 +1,11 @@
+# umpf-base: base
+# umpf-flags: upstreamstatus=insert
+# umpf-name: name
+# umpf-version: name/20221209-2
+# umpf-topic: a
+# umpf-hashinfo: f46ed0419d2c31ed10f978cc461e0d1ae4b3b426
+# umpf-topic-range: d306da785d874c09b89264d3f71632bc14bfe51f..121863a14e5f5430eea076205d50d668aeb66aa3
+# umpf-topic: b
+# umpf-hashinfo: 3755a03cf640725df1aeb13789cba87154a47b04
+# umpf-topic-range: 121863a14e5f5430eea076205d50d668aeb66aa3..83884ac6f3420eb1b1c98628b64dc1a77b6c1136
+# umpf-end
