@@ -13,4 +13,7 @@ SRC_URI += "\
 SRC_URI += "\
   file://patches/0101-b1.patch \
   "
+UMPF_BASE = "base"
+UMPF_VERSION = "20221209-1"
+PV = "${UMPF_BASE}-${UMPF_VERSION}"
 # umpf-end

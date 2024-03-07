@@ -1414,6 +1414,15 @@ format_patch_end() {
 	if ${NIX}; then
 		echo "]" >&${series_out}
 	fi
+	if ${BB}; then
+		local base_name="$(<"${STATE}/base-name")"
+		echo "UMPF_BASE = \"${base_name//v/}\"" >&${series_out}
+		echo "UMPF_VERSION = \"$(<"${STATE}/version")\"" >&${series_out}
+		echo "PV = \"\${UMPF_BASE}-\${UMPF_VERSION}\"" >&${series_out}
+		if [ "$(head -n 1 README 2>/dev/null)" = "Linux kernel" ]; then
+			echo "LINUX_VERSION = \"\${UMPF_BASE}\"" >&${series_out}
+		fi
+	fi
 	echo "$line" >&${series_out}
 }
 
