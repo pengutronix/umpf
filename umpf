@@ -1360,6 +1360,10 @@ format_patch_name() {
 }
 
 format_patch_version() {
+	local name="$(<"${STATE}/name")"
+	local version="${content#${name}/}"
+	echo "${version}" > "${STATE}/version"
+	echo "${content}" > "${STATE}/tag"
 	echo "$line" >&${series_out}
 	if ${NIX}; then
 		echo "[" >&${series_out}

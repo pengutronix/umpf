@@ -3,6 +3,6 @@
 # Test creating a Yocto compatible patchset with "umpf format-patch --bb".
 #
 
-umpf format-patch umpf-tag --bb --patchdir=patches
+umpf format-patch name/20240314-2 --bb --patchdir=patches
 
 diff -u ${TEST_DIR}/series-format-patch-bb.ref patches/series.inc
