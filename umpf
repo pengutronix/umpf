@@ -928,7 +928,7 @@ parse() {
 		test -n "${content}" || bailout "${cmd} line without value"
 		if ${STABLE}; then
 			local name="$(<"${STATE}/name")"
-			local version="$(sed "s;${name}/\([0-9]\{8\}\)-.*;\1${VERSION_SEPARATOR}${VERSION};" <<< "${content}")"
+			local version="$(sed "s;${name}/\([0-9]\{8\}\)${VERSION_SEPARATOR}.*;\1${VERSION_SEPARATOR}${VERSION};" <<< "${content}")"
 			local tagname="${name}/${version}"
 			echo "${version}" > "${STATE}/version"
 			echo "${tagname}" > "${STATE}/tag"
@@ -1360,6 +1360,10 @@ format_patch_name() {
 }
 
 format_patch_version() {
+	local name="$(<"${STATE}/name")"
+	local version="${content#${name}/}"
+	echo "${version}" > "${STATE}/version"
+	echo "${content}" > "${STATE}/tag"
 	echo "$line" >&${series_out}
 	if ${NIX}; then
 		echo "[" >&${series_out}
