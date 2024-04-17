@@ -200,6 +200,8 @@ usage() {
 	  diff <commit-ish>          show patches not in any topic branch (not
 	                             upstream) and patches missing locally
 	  show <commit-ish>          show an useries file from an umpf
+	  tig [umpf]                 browse an umpf interactively, showing state of
+	                             local, remote and remote-tracking topic branches
 
 	  tag <commit-ish>           generate a utag from an umerge
 	  format-patch <utag>        generate a useries file and patch stack
@@ -1871,6 +1873,56 @@ do_abort() {
 do_show() {
 	VERBOSE=true
 	prepare_persistent show "${@}"
+	cleanup
+}
+
+### namespace: tig ###
+
+tig_topic() {
+	local reply
+	find_branch_rev "${content}"
+	if [ -n "${reply}" ]; then
+		echo "${reply}" >> "${STATE}/refs"
+	fi
+
+	# possibly-existing local topic branch
+	if ${GIT} rev-parse --verify -q "${content}" >/dev/null 2>&1; then
+		echo "${content}" >> "${STATE}/refs"
+	fi
+
+	# possibly-existing remote-tracking topic branch
+	# (might be different from the remote chosen above)
+	if ${GIT} rev-parse --verify -q "${content}@{u}" >/dev/null 2>&1; then
+		echo "${content}@{u}" >> "${STATE}/refs"
+	fi
+}
+
+tig_release() {
+	echo "${content}" >> "${STATE}/refs"
+}
+
+tig_hashinfo() {
+	echo "${content}" >> "${STATE}/refs"
+}
+
+### command: tig ###
+
+do_tig () {
+	local refs base ranges
+
+	prepare_persistent tig "${@}"
+	parse_series tig "${STATE}/series"
+
+	mapfile -t refs < "${STATE}/refs"
+	base="$(<"${STATE}/base-name")"
+	ranges=
+
+	# cut off each ref at base
+	for ref in "${refs[@]}"; do
+		ranges="${ranges} ${base}^..${ref}"
+	done
+
+	tig ${ranges}
 	cleanup
 }
 
