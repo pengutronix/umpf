@@ -200,6 +200,8 @@ usage() {
 	  diff <commit-ish>          show patches not in any topic branch (not
 	                             upstream) and patches missing locally
 	  show <commit-ish>          show an useries file from an umpf
+	  tig [umpf]                 browse an umpf interactively, showing state of
+	                             local, remote and remote-tracking topic branches
 
 	  tag <commit-ish>           generate a utag from an umerge
 	  format-patch <utag>        generate a useries file and patch stack
@@ -1871,6 +1873,38 @@ do_abort() {
 do_show() {
 	VERBOSE=true
 	prepare_persistent show "${@}"
+	cleanup
+}
+
+### namespace: tig ###
+
+tig_topic() {
+	${GIT} show-ref -s "${content}" >> "${STATE}/refs"
+}
+
+tig_release() {
+	echo "${content}" >> "${STATE}/refs"
+}
+
+tig_hashinfo() {
+	echo "${content}" >> "${STATE}/refs"
+}
+
+### command: tig ###
+
+do_tig () {
+	local -a refs
+	local base
+
+	prepare_persistent tig "${@}"
+	parse_series tig "${STATE}/series"
+
+	mapfile -t refs < "${STATE}/refs"
+	base="$(<"${STATE}/base-name")"
+
+	# cut off each ref at base
+	tig ^"${base}"^ "${refs[@]}"
+
 	cleanup
 }
 
