@@ -1480,7 +1480,7 @@ run_format_patch() {
 	exec {series_out}<&-
 	unset series_out
 
-	mkdir -p "${PATCH_DIR}" ||  bailout "Failed to create patch dir"
+	mkdir -p "$(realpath -m ${PATCH_DIR})" ||  bailout "Failed to create patch dir"
 	for patch in "${STATE}/patches/"*; do
 		tail -n+2 "${patch}" > "${PATCH_DIR}/$(basename "${patch}")"
 	done
@@ -1522,7 +1522,7 @@ do_format_patch() {
 			remove_patches "${line}"
 		done < "${OLD_SERIES}"
 	elif ${FORCE} &&  [ -d "${PATCH_DIR}" ]; then
-		rm -r "${PATCH_DIR}" || abort "Failed to remove old patch dir"
+		rm -r "$(realpath -m ${PATCH_DIR})" || abort "Failed to remove old patch dir"
 	elif [ -d "${PATCH_DIR}" ]; then
 		abort "patch dir '${PATCH_DIR}' exists!"
 	fi
