@@ -38,7 +38,7 @@ _umpf_completion()
 	"")
 		COMPREPLY=( $( compgen -W "${completion_cmds[*]} help" -- $cur ) )
 		;;
-	diff|show|tag|build)
+	diff|show|tag|tig|build)
 		local -a refs
 		refs=( $( compgen -W "$( git for-each-ref --format='%(refname:short)' refs/tags refs/heads refs/remotes)" -- $cur ) )
 		if [ ${#refs[@]} -eq 0 ]; then
