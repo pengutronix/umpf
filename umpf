@@ -1083,7 +1083,7 @@ rebase_branch() {
 		if ${GIT} log --oneline "${base}..${topicrev}" | grep -q '\(amend\|fixup\|squash\)!'; then
 			args="-i --autosquash"
 		fi
-		if ! ${GIT} rebase -q ${args} --onto HEAD "${base}" "${topicrev}" >&2; then
+		if ! ${GIT} rebase -q ${args} --no-keep-empty --onto HEAD "${base}" "${topicrev}" >&2; then
 			if ! rebase_try_continue; then
 				bailout "rebase failed"
 			fi
