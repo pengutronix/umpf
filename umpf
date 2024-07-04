@@ -187,6 +187,7 @@ usage() {
 	  -p, --patchdir <path>      with format-patch: write patches to <path>/
 	      --relative <path>      create patches relative to <path>
 	  -r, --remote <remote>      use <remote> to resolve branch names
+	  -l, --local                use local branches, alias for --remote refs/heads
 	      --override <topic>[=<commit-ish>]
 	                             use commit-ish instead for the topic. May be
 				     specified more than once. If only <topic> is
@@ -238,8 +239,8 @@ setup() {
 		GIT_FALLBACK_REMOTE="${tmp}"
 	fi
 
-	o="fhisub:n:p:r:v:"
-	l="auto-rerere,bb,nix,flags:,force,help,identical,stable,update,base:,name:,patchdir:,relative:,override:,remote:,version:"
+	o="fhilsub:n:p:r:v:"
+	l="auto-rerere,bb,nix,flags:,force,help,identical,stable,update,base:,name:,patchdir:,relative:,override:,remote:,local,version:"
 	if ! args="$(getopt -n umpf -o "${o}" -l "${l}" -- "${@}")"; then
 		usage
 		exit 1
@@ -302,6 +303,9 @@ setup() {
 		-r|--remote)
 			GIT_REMOTE="${1}"
 			shift
+			;;
+		-l|--local)
+			GIT_REMOTE="refs/heads"
 			;;
 		--override)
 			IFS="=" read -r topic commitish <<< "${1}"
