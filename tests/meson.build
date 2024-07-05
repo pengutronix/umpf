@@ -19,6 +19,7 @@ tests = [
   'umpf-series-tag-continue',
   'umpf-series-tag-rerere',
   'umpf-series-tag-continue-flags',
+  'umpf-series-tag-empty',
   'umpf-format-patch',
   'umpf-format-patch-bb',
   'umpf-show',
