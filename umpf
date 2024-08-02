@@ -1196,6 +1196,11 @@ rebase_end() {
 		# the project version is used in library names
 		sed -i "s/@VCS_TAG@/\0.${version}/" src/version/version.h.in &&
 		git add src/version/version.h.in
+	elif grep -sq "'gallium-@0@'.format(meson.project_version())" src/gallium/targets/dri/meson.build; then
+		# for Mesa >= 24.2.0 fixup PACKAGE_VERSION
+		# the project version is used in library names
+		sed -i "s/-DPACKAGE_VERSION=\"@0@/\0.${version}/" meson.build &&
+		git add meson.build
 	elif [ -e "${meson_build}" ]; then
 		case "${project}" in
 		libcamera)
