@@ -175,7 +175,7 @@ usage() {
 	Mandatory arguments to long options are mandatory for short options too.
 	      --auto-rerere          automatically try to use rerere after conflicts
 	      --bb                   with format-patch: write patch series for bitbake
-	      --nix                   with format-patch: write patch series nix
+	      --nix                  with format-patch: write patch series nix
 	  -h, --help
 	  -f, --force
 	      --flags                specify/override umpf-flags
