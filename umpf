@@ -1659,24 +1659,35 @@ do_diff() {
 ### command: distribute ###
 
 apply_to_topic() {
-	local rev branch topic state
+	local rev branch topic state base subject match
 	rev="${1}"
 	branch=$(cat "${STATE}/distribute-branch" 2>/dev/null)
 	topic=$(cat "${STATE}/distribute-topic" 2>/dev/null)
 	state=$(cat "${STATE}/distribute-state" 2>/dev/null)
+	base="$(<"${STATE}/base-name")"
 
 	echo
 	GIT_PAGER="" ${GIT} log --oneline -1 "${rev}"
 
+	subject="$(git log --pretty="format:%s" -1 "${rev}")"
+	case "${subject}" in
+	"fixup!"*|"amend!"*|"squash!"*)
+		match="${subject#*\! }"
+		;;
+	esac
+
 	while [ -z "${topic}" ]; do
-		local i=0 ret
+		local i=0 ret default
 		for branch in "${branch_names[@]}"; do
 			echo "${i}) ${branch}"
+			if git log --pretty="format:%s" "${base}..${branches[${i}]}" | grep -q "^${match}$"; then
+				default="${i}"
+			fi
 			i=$((i+1))
 		done
 		echo "s) show patch"
 		echo "x) skip patch"
-		read -e -p "Branch: " ret
+		read -e -p "Branch: " -i "${default}" ret
 		case "${ret}" in
 		s)
 			${GIT} show "${rev}"
