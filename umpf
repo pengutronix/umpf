@@ -192,7 +192,7 @@ usage() {
 	                             use commit-ish instead for the topic. May be
 				     specified more than once. If only <topic> is
 				     specified, it's interpreted as
-				     <topic>=<remote>/<topic>
+				     <topic>=[<remote>/]<topic>
 	  -u, --update               with --patchdir: update existing patches in <path>
 	  -v, --version <version>    with tag: overwrite version number [default: 1]
 
@@ -352,7 +352,7 @@ setup() {
 		local rev
 
 		if [ -z "${OVERRIDES[$topic]}" ]; then
-			OVERRIDES[$topic]="${GIT_REMOTE}/${topic}"
+			OVERRIDES[$topic]="${GIT_REMOTE}${topic}"
 		fi
 
 		if ! rev="$(${GIT} rev-parse "${OVERRIDES[$topic]}^{}" 2> /dev/null)"; then
