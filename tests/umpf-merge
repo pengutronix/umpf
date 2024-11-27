@@ -6,6 +6,6 @@
 umpf merge a
 umpf merge b
 
-umpf show --base=base --name=name > series.merge
+umpf show --identical --base=base --name=name > series.merge
 
 diff -u ${TEST_DIR}/series-merge.ref series.merge
