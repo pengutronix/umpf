@@ -445,6 +445,10 @@ find_branch_rev() {
 			i=$((i+1))
 		done
 		read -e -i ${def} -p "branch number: " i
+		# if yes(1) is piped in, i is not populated
+		if [ -z "$i" ]; then
+			i="${def}"
+		fi
 		nice_branch "${branches[$i]}"
 		remote="${replies[1]:-refs/heads}/"
 		if [ -z "${GIT_REMOTE}" ]; then
