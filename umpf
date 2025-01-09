@@ -190,9 +190,9 @@ usage() {
 	  -l, --local                use local branches, alias for --remote refs/heads
 	      --override <topic>[=<commit-ish>]
 	                             use commit-ish instead for the topic. May be
-				     specified more than once. If only <topic> is
-				     specified, it's interpreted as
-				     <topic>=[<remote>/]<topic>
+	                             specified more than once. If only <topic> is
+	                             specified, it's interpreted as
+	                             <topic>=[<remote>/]<topic>
 	  -u, --update               with --patchdir: update existing patches in <path>
 	  -v, --version <version>    with tag: overwrite version number [default: 1]
 
