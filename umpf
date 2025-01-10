@@ -190,28 +190,31 @@ usage() {
 	  -l, --local                use local branches, alias for --remote refs/heads
 	      --override <topic>[=<commit-ish>]
 	                             use commit-ish instead for the topic. May be
-				     specified more than once. If only <topic> is
-				     specified, it's interpreted as
-				     <topic>=[<remote>/]<topic>
+	                             specified more than once. If only <topic> is
+	                             specified, it's interpreted as
+	                             <topic>=[<remote>/]<topic>
 	  -u, --update               with --patchdir: update existing patches in <path>
 	  -v, --version <version>    with tag: overwrite version number [default: 1]
 
 	Commands:
-	  diff <commit-ish>          show patches not in any topic branch (not
+	  If optional <umpf> or <commit-ish> arguments are unspecified, HEAD is used.
+
+	  diff [<umpf>|<commit-ish>] show patches not in any topic branch (not
 	                             upstream) and patches missing locally
-	  show <commit-ish>          show an useries file from an umpf
-	  tig [umpf]                 browse an umpf interactively, showing state of
+	  show [<umpf>|<commit-ish>] show an useries file from an umpf
+	  tig [<umpf>]               browse an umpf interactively, showing state of
 	                             local, remote and remote-tracking topic branches
 
-	  tag <commit-ish>           generate a utag from an umerge
-	  format-patch <utag>        generate a useries file and patch stack
+	  tag [<umpf>|<commit-ish>]  generate a utag from a useries or umerge
+	                             or commits stacked on top of an umpf
+	  format-patch [<utag>]      generate a useries file and patch stack
 	                             from a utag
 
-	  merge <commit-ish> [<name>]merge one a topic branches into current
-	                             head, like git merge, but umpf compatible
+	  merge <commit-ish> [<name>]merge one topic branches into current
+	                             head, like git merge, but umpf compatible.
 	                             Use <name> as topic name if specified.
 	                             Otherwise <commit-ish> must be the correct
-	                             topic name. The remote is removed if necessary
+	                             topic name. The remote is removed if necessary.
 	  build <umpf>               build an umerge from another umpf
 	  distribute <commit-ish>    push patches not yet in any topic branch
 	                             upstream
