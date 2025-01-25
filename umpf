@@ -40,6 +40,7 @@ IDENTICAL=false
 STABLE=false
 DEFAULT=false
 FORCE=false
+DRYRUN=false
 UPDATE=false
 VERBOSE=false
 VERSION_SEPARATOR=-
@@ -182,6 +183,8 @@ usage() {
 	      --nix                  with format-patch: write patch series nix
 	  -h, --help
 	  -f, --force
+	      --dry-run              with push/pull: Do everything except actually send
+	                             the updates.
 	      --flags                specify/override umpf-flags
 	  -i, --identical            use exact commit hashes, not tip of branches
 	  -s, --stable               create a 'stable' tag from a branch based on an
@@ -198,6 +201,7 @@ usage() {
 	                             specified, it's interpreted as
 	                             <topic>=[<remote>/]<topic>
 	  -u, --update               with --patchdir: update existing patches in <path>
+	                             with push/pull: update only existing branches
 	  -v, --version <version>    with tag: overwrite version number [default: 1]
 
 	Commands:
@@ -222,6 +226,8 @@ usage() {
 	  build <umpf>               build an umerge from another umpf
 	  distribute <commit-ish>    push patches not yet in any topic branch
 	                             upstream
+	  push [<umpf>]              push topic branches to the given remote
+	  pull [<umpf>]              pull topic branches into the local repository
 
 	  continue                   continue a previously interrupted umpf command
 	  abort                      abort a previously started umpf command
@@ -249,7 +255,7 @@ setup() {
 	fi
 
 	o="fhilsub:n:p:r:v:"
-	l="auto-rerere,bb,nix,flags:,default,force,help,identical,stable,update,base:,name:,patchdir:,relative:,override:,remote:,local,version:"
+	l="auto-rerere,bb,nix,flags:,default,dry-run,force,help,identical,stable,update,base:,name:,patchdir:,relative:,override:,remote:,local,version:"
 	if ! args="$(getopt -n umpf -o "${o}" -l "${l}" -- "${@}")"; then
 		usage
 		exit 1
@@ -277,6 +283,9 @@ setup() {
 			;;
 		-f|--force)
 			FORCE=true
+			;;
+		--dry-run)
+			DRYRUN=true
 			;;
 		--flags)
 			FLAGS="${1}"
@@ -1878,6 +1887,117 @@ do_distribute() {
 	fi
 
 	run_distribute
+}
+
+### namespace: push ###
+
+push_topic() {
+	echo "${content}" >> "${STATE}/topic-names"
+}
+
+push_hashinfo() {
+	echo "${content}" >> "${STATE}/topics"
+}
+
+push_version() {
+	echo "${content}" > "${STATE}/tagname"
+}
+
+push_topic_range() {
+	echo "${content##*..}" > "${STATE}/tagrev-flat"
+}
+
+### command: push ###
+
+shorten_commitish() {
+	${GIT} rev-parse --revs-only --short "${@}" 2>/dev/null
+}
+
+do_push () {
+	local remote
+	local -a opts args branches branch_names
+	local -A topics
+
+	if [ -z "${GIT_REMOTE}" ]; then
+		info "Git remote must be specified. Cannot continue."
+		exit 1
+	fi
+
+	if [ "${GIT_REMOTE}" = "refs/heads/" ]; then
+		remote="${GIT_DIR}"
+	else
+		remote="${GIT_REMOTE%/}"
+	fi
+
+	prepare_persistent push "${@}"
+	parse_series push "${STATE}/series"
+
+	local tagname="$(<"${STATE}/tagname")"
+	local tagrevf="$(<"${STATE}/tagrev-flat")"
+
+	mapfile -t branches < "${STATE}/topics"
+	mapfile -t branch_names < "${STATE}/topic-names"
+	for ((i = 0; i < ${#branch_names[@]}; i++)); do
+		topics["refs/heads/${branch_names[i]}"]="${branches[i]}"
+	done
+
+	# To determine whether the remote tag matches what we are about
+	# to push, we need to fetch it first to look at the flat tag's revision
+	if ! git fetch --quiet --no-tags "${remote}" "${tagname}" 2>/dev/null; then
+		abort "${remote}${remote:+/}refs/tags/${tagname} not found"
+	fi
+
+	local rtagrevf="$(${GIT} rev-parse --revs-only "FETCH_HEAD^" 2>/dev/null)"
+	if [ "${rtagrevf}" != "${tagrevf}" ]; then
+		abort "${remote}${remote:+/}refs/tags/${tagname} has unexpected" \
+			'commit hash "'"$(shorten_commitish "${rtagrevf}")"'"' \
+			'instead of "' "$(shorten_commitish "${tagrevf}")" '"'
+	fi
+
+	if ${UPDATE}; then
+		local -A rtopics
+
+		exec {lsremotefd}< <(${GIT} ls-remote "${remote}" "${!topics[@]}")
+		while read sha ref <&${lsremotefd}; do
+			rtopics["$ref"]="${sha}"
+		done
+		exec {lsremotefd}<&-
+
+		# Don't create any new branches, only updated existing ones
+		for topic in "${!topics[@]}"; do
+			if [[ ! -v "rtopics[$topic]" ]]; then
+				unset "topics[$topic]"
+			fi
+		done
+	fi
+
+	if ${FORCE}; then
+		if [ "${GIT_REMOTE}" = "refs/heads/" ]; then
+			# Otherwise, we'll always get rejected for "stale info"
+			opts+=("--force")
+		else
+			opts+=("--force-with-lease")
+		fi
+	fi
+
+	if ${DRYRUN}; then
+		opts+=("--dry-run")
+	fi
+
+	for topic in "${!topics[@]}"; do
+		args+=("${topics[$topic]}:${topic}")
+	done
+
+	# Push tag again to avoid an error if $args is empty
+	${GIT} push "${opts[@]}" ${remote} -- "${tagname}" "${args[@]}"
+
+	cleanup
+}
+
+### command: pull ###
+
+do_pull () {
+	GIT_REMOTE=refs/heads/ do_push "$@"
 }
 
 ### command: continue ###
