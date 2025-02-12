@@ -37,6 +37,7 @@ FLAGS=""
 PATCH_DIR="umpf-patches"
 IDENTICAL=false
 STABLE=false
+DEFAULT=false
 FORCE=false
 UPDATE=false
 VERBOSE=false
@@ -173,6 +174,7 @@ usage() {
 	usage: $0 [<options>] [--] <command>
 
 	Mandatory arguments to long options are mandatory for short options too.
+	      --default              answer interactive prompts with the default option
 	      --auto-rerere          automatically try to use rerere after conflicts
 	      --bb                   with format-patch: write patch series for bitbake
 	      --nix                  with format-patch: write patch series nix
@@ -245,7 +247,7 @@ setup() {
 	fi
 
 	o="fhilsub:n:p:r:v:"
-	l="auto-rerere,bb,nix,flags:,force,help,identical,stable,update,base:,name:,patchdir:,relative:,override:,remote:,local,version:"
+	l="auto-rerere,bb,nix,flags:,default,force,help,identical,stable,update,base:,name:,patchdir:,relative:,override:,remote:,local,version:"
 	if ! args="$(getopt -n umpf -o "${o}" -l "${l}" -- "${@}")"; then
 		usage
 		exit 1
@@ -267,6 +269,9 @@ setup() {
 			;;
 		--nix)
 			NIX=true
+			;;
+		--default)
+			DEFAULT=true
 			;;
 		-f|--force)
 			FORCE=true
@@ -414,6 +419,16 @@ nice_branch() {
 	read -r -a replies < <(sed -r -n 's,^(remotes/([^/]*)/|heads/)?(.*),\3 \2,p' <<< "${1}")
 }
 
+read_interactive() {
+	local prompt="${1}" def="${2}"
+	if ${DEFAULT} && [ -n "${def}" ]; then
+		echo "${prompt}: ${def}"
+		choice="${def}"
+	else
+		read -e -i "${def}" -p "${prompt}: " choice
+	fi
+}
+
 find_branch_rev() {
 	local name branch remote
 	local -a branches replies
@@ -438,7 +453,7 @@ find_branch_rev() {
 		else
 			info "Branch not found for '${remote}'. Choose alternative branch:"
 		fi
-		local i=0 def=0
+		local i=0 def=0 choice
 		for branch in "${branches[@]}"; do
 			nice_branch "${branch}"
 			echo "${i}) ${replies[1]:+${replies[1]}/}${replies[0]}"
@@ -447,8 +462,8 @@ find_branch_rev() {
 			fi
 			i=$((i+1))
 		done
-		read -e -i ${def} -p "branch number: " i
-		nice_branch "${branches[$i]}"
+		read_interactive "branch number" "${def}"
+		nice_branch "${branches[${choice}]}"
 		remote="${replies[1]:-refs/heads}/"
 		if [ -z "${GIT_REMOTE}" ]; then
 			GIT_REMOTE="${remote}"
@@ -464,7 +479,7 @@ find_branch_rev() {
 		bailout "Failed to find '${name}'"
 	fi
 	for branch in "${branches[@]}"; do
-		local b="$(${GIT} rev-parse --verify "${branch}^{}")"
+		local choice b="$(${GIT} rev-parse --verify "${branch}^{}")"
 		if [ "${reply}" == "${b}" ]; then
 			continue
 		fi
@@ -472,8 +487,7 @@ find_branch_rev() {
 			info "Warning: The following commits are in '${branch}' but not in '${remote}${name}':"
 			GIT_PAGER="" ${GIT} log --oneline "${reply}...${b}"
 			if tty -s; then
-				local choice=""
-				read -e -i n -p "Use ${branch} instead? [y/n]: " choice
+				read_interactive "Use ${branch} instead? [y/n]" "n"
 				if [ "${choice}" == "y" ]; then
 					reply="${b}"
 				fi
@@ -489,7 +503,7 @@ list_branch_names() {
 }
 
 find_branch_name() {
-	local head merge mergelog candidate
+	local head merge mergelog candidate choice
 	local -a branches replies
 	head="${1}"
 	merge="${2}"
@@ -511,7 +525,8 @@ find_branch_name() {
 	0)
 		info "No branch found for ${mergelog}"
 		candidate=$(sed -n "s/^[0-9a-f]* Merge.* '\([^ ]*\)' .*/\1/p" <<< "${mergelog}")
-		read -e -i "${candidate}" -p "topic: " name
+		read_interactive "topic" "${candidate}"
+		name="${choice}"
 		;;
 	1)
 		nice_branch "${branches[0]}"
@@ -646,7 +661,9 @@ import_series() {
 
 	if [ -z "${BASE}" ]; then
 		BASE="$(${GIT} describe "${base_rev}" 2>/dev/null)"
-		read -e -i "${BASE}" -p "base: " BASE
+		local choice
+		read_interactive "base" "${BASE}"
+		BASE="${choice}"
 	fi
 	echo "# umpf-base: ${BASE}" >> "${series}"
 	if [ -n "${GIT_RELATIVE}" ]; then
@@ -1680,7 +1697,7 @@ apply_to_topic() {
 	esac
 
 	while [ -z "${topic}" ]; do
-		local i=0 ret default
+		local i=0 choice default
 		for branch in "${branch_names[@]}"; do
 			echo "${i}) ${branch}"
 			if git log --pretty="format:%s" "${base}..${branches[${i}]}" | grep -q "^${match}$"; then
@@ -1690,8 +1707,8 @@ apply_to_topic() {
 		done
 		echo "s) show patch"
 		echo "x) skip patch"
-		read -e -p "Branch: " -i "${default}" ret
-		case "${ret}" in
+		read_interactive "Branch" "${default}"
+		case "${choice}" in
 		s)
 			${GIT} show "${rev}"
 			continue
@@ -1700,23 +1717,23 @@ apply_to_topic() {
 			return
 			;;
 		[0-9]*)
-			branch="${branch_names[${ret}]}"
+			branch="${branch_names[${choice}]}"
 			if [ -z "${branch}" ]; then
-				echo "'$ret' is not a valid branch number"
+				echo "'${choice}' is not a valid branch number"
 			fi
 			;;
 		*)
-			echo "Invalid command '$ret'"
+			echo "Invalid command '${choice}'"
 			continue
 		esac
 		if ! topic="$(${GIT} rev-parse -q --verify "refs/umpf/${branch}^{}")"; then
-			topic="${branches[${ret}]}"
+			topic="${branches[${choice}]}"
 		fi
 		if [ -z "${topic}" ]; then
 			local reply
 			IDENTICAL=false find_branch_rev "${branch}"
 			topic="${reply}"
-			branches[${ret}]="${topic}"
+			branches[${choice}]="${topic}"
 		fi
 		echo "${branch}" > "${STATE}/distribute-branch"
 		echo "${topic}" > "${STATE}/distribute-topic"
