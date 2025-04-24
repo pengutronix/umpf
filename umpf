@@ -34,6 +34,7 @@ SERIES=""
 BASE=""
 NAME=""
 FLAGS=""
+PROJECT=""
 PATCH_DIR="umpf-patches"
 IDENTICAL=false
 STABLE=false
@@ -114,6 +115,7 @@ bailout() {
 		SERIES="${SERIES}"
 		IDENTICAL="${IDENTICAL}"
 		STABLE="${STABLE}"
+		PROJECT="${PROJECT}"
 		UPDATE="${UPDATE}"
 		FLAGS="${FLAGS}"
 		VERSION_SEPARATOR="${VERSION_SEPARATOR}"
@@ -1023,7 +1025,7 @@ rebase_base() {
 	echo 1 > "${STATE}/num"
 	${GIT} checkout -q "${baserev}" || abort "checkout '${content}' failed"
 	if grep -sq "project('libcamera'," "meson.build"; then
-	    project="libcamera"
+	    PROJECT="libcamera"
 	    VERSION_SEPARATOR="."
 	fi
 }
@@ -1222,7 +1224,7 @@ rebase_end() {
 		sed -i "s/-DPACKAGE_VERSION=\"@0@/\0.${version}/" meson.build &&
 		git add meson.build
 	elif [ -e "${meson_build}" ]; then
-		case "${project}" in
+		case "${PROJECT}" in
 		libcamera)
 			meson_extra="+${version}"
 			;;
