@@ -4,15 +4,17 @@
 # umpf-topic: a
 # umpf-hashinfo: f46ed0419d2c31ed10f978cc461e0d1ae4b3b426
 # umpf-topic-range: d306da785d874c09b89264d3f71632bc14bfe51f..b2b9f854952b0be84ba2472f236783d09bfa6561
-SRC_URI += "\
+UMPF_SRC_URI += "\
   file://patches/0001-a1.patch \
   "
 # umpf-topic: b
 # umpf-hashinfo: 3755a03cf640725df1aeb13789cba87154a47b04
 # umpf-topic-range: b2b9f854952b0be84ba2472f236783d09bfa6561..e791a2bb22e021b8513809e1e1cbf692be74fd99
-SRC_URI += "\
+UMPF_SRC_URI += "\
   file://patches/0101-b1.patch \
   "
+SRC_URI += "${UMPF_SRC_URI}"
+
 UMPF_BASE = "base"
 UMPF_VERSION = "20240314-2"
 UMPF_PV = "${UMPF_BASE}-${UMPF_VERSION}"
