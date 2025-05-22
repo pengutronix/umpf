@@ -1425,7 +1425,7 @@ format_patch_hashinfo() {
 
 filter_patches() {
 	if ${BB}; then
-		echo 'SRC_URI += "\'
+		echo 'UMPF_SRC_URI += "\'
 		sed "s,^${STATE}/\(.*\)$,  file://\1 \\\\,"
 		echo '  "'
 	elif ${NIX}; then
@@ -1457,6 +1457,8 @@ format_patch_end() {
 	fi
 	if ${BB}; then
 		local base_name="$(<"${STATE}/base-name")"
+		echo "SRC_URI += \"\${UMPF_SRC_URI}\"" >&${series_out}
+		echo "" >&${series_out}
 		echo "UMPF_BASE = \"${base_name//v/}\"" >&${series_out}
 		echo "UMPF_VERSION = \"$(<"${STATE}/version")\"" >&${series_out}
 		echo "UMPF_PV = \"\${UMPF_BASE}-\${UMPF_VERSION}\"" >&${series_out}
