@@ -23,6 +23,7 @@ tests = [
   'umpf-format-patch',
   'umpf-format-patch-bb',
   'umpf-show',
+  'umpf-show-identical',
   'umpf-versions'
 ]
 foreach test_name : tests
