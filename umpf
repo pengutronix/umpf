@@ -700,8 +700,8 @@ import_series() {
 			branch_names[${#branch_names[@]}]="${name}"
 			branch_squashes[${name}]="${squash}"
 			names="${names}${name}#"
+			tmp_branches[${name}]="${branch}"
 		fi
-		tmp_branches[${name}]="${branch}"
 	done
 	for name in "${branch_names[@]}"; do
 		branch="${tmp_branches[${name}]}"
