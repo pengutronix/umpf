@@ -20,7 +20,7 @@ sed -i '/^# umpf-base: base$/a # umpf-flags: extraversion=conflictfree' series.c
 umpf tag -f --version=2 series.conflict --remote=origin || test $? = 1
 git add a.txt
 echo | umpf continue
-umpf show 2>&1
+umpf show --identical 2>&1
 
 diff -u ${TEST_DIR}/version-files/ref/Makefile.conflictfree Makefile
 git log --format=%B -n 1 | grep "^# umpf-" > series.tag
