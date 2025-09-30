@@ -1589,6 +1589,12 @@ build_branch() {
 	fi
 }
 
+build_flags() {
+	if [ -z "${FLAGS}" ]; then
+		FLAGS="${content}"
+	fi
+}
+
 build_topic() {
 	if ${IDENTICAL}; then
 		if [ -n "${MERGE_TOPIC}" ]; then
@@ -1612,8 +1618,8 @@ build_hashinfo() {
 run_build() {
 	parse_series build "${STATE}/series"
 	${GIT} notes add -m "umpf-build-note: $(<"${STATE}/base-name") $(<"${STATE}/name")"
-	if [ -f "${FLAGS}" ]; then
-		${GIT} notes append -m "umpf-build-flags: $(<"${FLAGS}")"
+	if [ -n "${FLAGS}" ]; then
+		${GIT} notes append -m "umpf-build-flags: ${FLAGS}"
 	fi
 	if [ -n "${GIT_RELATIVE}" ]; then
 		${GIT} notes append -m "umpf-build-relative: ${GIT_RELATIVE}"
