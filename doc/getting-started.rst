@@ -447,6 +447,47 @@ Or tell umpf to rebase onto a new *umpf-base* when creating a fresh *utag*::
     # umpf-topic-range: 8bae5bbec8cb4599c141405e9755b7c0e42e064f..19cdc2b857e662a38c712b41ce610000a5ddc6ae
     # umpf-end
 
+Synchronizing umpf topic branch
+-------------------------------
+
+Due to Git's distributed nature, checked out topic branches can get
+out-of-sync. To compare local topic branches against those referenced
+in a *utag*, ``umpf pull`` can be used::
+
+  umpf pull --dry-run 5.0/special-customer-release/20190311-1
+  umpf: Using series from commit message...
+   * [new branch]                02fb74aa381080855a57080138b29ecc96586788 -> v5.0/topic/most-fixes
+   ! [rejected]                  f0693b782dd026f2adc4d3c336d9ac6dfb352a73 -> v5.0/topic/more-fixes  (non-fast-forward)
+
+Following options are supported:
+
+- ``--dry-run``: compare the branches, but stop short of actually updating
+                 them
+- ``--force``: reset local branches that are not checked-out to the
+               ``umpf-hashinfo`` in the ``utag``
+- ``--update``: only update existing branches
+
+The counterpart to publish topic branches to a remote after creating a new
+``utag`` is ``umpf push``:
+
+  umpf --dry-run --remote=downstream push 5.0/special-customer-release/20190311-1
+  umpf: Using series from commit message...
+  To ssh://downstream
+   * [new branch]                          02fb74aa381080855a57080138b29ecc96586788 -> v5.0/topic/most-fixes
+   ! [rejected]                            f0693b782dd026f2adc4d3c336d9ac6dfb352a73 -> v5.0/topic/more-fixes  (non-fast-forward)
+  error: failed to push some refs to 'ssh:/downstream'
+
+It supports the same options as ``umpf pull``, but instead of doing local
+changes, it operates on the specified remote.
+
+``umpf push`` is especially useful when multiple developers are creating
+`utags` for the same project in parallel. Each developer will initially
+only push their `utag` to the common repository. Once the changes
+introduced by a `utag` are accepted, all topic branches can be force
+updated on the remote to this most recent `utag`, possibly via
+a server-side pull-request post-merge hook running, e.g.::
+
+  umpf push --remote=downstream --force .../linux/patches/series.inc
 
 Overview
 --------
