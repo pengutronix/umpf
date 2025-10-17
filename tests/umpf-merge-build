@@ -6,5 +6,5 @@
 git checkout umpf-merge
 umpf build --remote=origin --base=base --name=name
 
-umpf show > series.build
+umpf show --identical > series.build
 diff -u ${TEST_DIR}/series-merge.ref series.build
