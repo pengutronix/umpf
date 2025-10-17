@@ -680,6 +680,9 @@ import_series() {
 	if [ -n "${GIT_RELATIVE}" ]; then
 		echo "# umpf-relative: ${GIT_RELATIVE}" >> "${series}"
 	fi
+	if [ -n "${FLAGS}" ]; then
+		echo "# umpf-flags: ${FLAGS}" >> "${series}"
+	fi
 	if [ -z "${NAME}" ]; then
 		if ! NAME="$(${GIT} symbolic-ref -q --short "${import}")"; then
 			if ${GIT} show-ref --tags --heads -q "${import}"; then
