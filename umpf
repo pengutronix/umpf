@@ -680,6 +680,9 @@ import_series() {
 	if [ -n "${GIT_RELATIVE}" ]; then
 		echo "# umpf-relative: ${GIT_RELATIVE}" >> "${series}"
 	fi
+	if [ -n "${FLAGS}" ]; then
+		echo "# umpf-flags: ${FLAGS}" >> "${series}"
+	fi
 	if [ -z "${NAME}" ]; then
 		if ! NAME="$(${GIT} symbolic-ref -q --short "${import}")"; then
 			if ${GIT} show-ref --tags --heads -q "${import}"; then
@@ -934,6 +937,7 @@ parse() {
 		${has_base} || bailout "${cmd} before base"
 		test -n "${content}" || bailout "${cmd} line without value"
 		if [ -z "${FLAGS}" ]; then
+			FLAGS="${content}"
 			do_exec flags
 		fi
 		;;
@@ -1621,8 +1625,8 @@ build_hashinfo() {
 run_build() {
 	parse_series build "${STATE}/series"
 	${GIT} notes add -m "umpf-build-note: $(<"${STATE}/base-name") $(<"${STATE}/name")"
-	if [ -f "${FLAGS}" ]; then
-		${GIT} notes append -m "umpf-build-flags: $(<"${FLAGS}")"
+	if [ -n "${FLAGS}" ]; then
+		${GIT} notes append -m "umpf-build-flags: ${FLAGS}"
 	fi
 	if [ -n "${GIT_RELATIVE}" ]; then
 		${GIT} notes append -m "umpf-build-relative: ${GIT_RELATIVE}"
