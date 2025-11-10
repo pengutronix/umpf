@@ -2048,7 +2048,13 @@ do_abort() {
 
 do_show() {
 	VERBOSE=true
-	prepare_persistent show "${@}"
+	prepare_persistent show "${@}" | (
+		if $IDENTICAL; then
+			cat
+		else
+			sed -r '/^# umpf-(version|topic-range|hashinfo|release): /d'
+		fi
+	)
 	cleanup
 }
 

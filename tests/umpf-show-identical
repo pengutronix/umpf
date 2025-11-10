@@ -1,0 +1,8 @@
+#!/bin/bash
+#
+# Test the output of "umpf show".
+#
+
+umpf show --identical umpf-tag > series.show
+
+diff -u ${TEST_DIR}/series-identical-v1.ref series.show
