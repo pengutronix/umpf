@@ -430,6 +430,25 @@ nice_branch() {
 	read -r -a replies < <(sed -r -n 's,^(remotes/([^/]*)/|heads/)?(.*),\3 \2,p' <<< "${1}")
 }
 
+add_choice() {
+	choices+=("$1")
+	choice_descs+=("$2")
+}
+
+print_choices() {
+	local i default
+	default="$1"
+	for i in "${!choices[@]}"; do
+		if [ "${default}" = "${choices[${i}]}" ]; then
+			echo -en '\e[1m'
+			echo "${choices[${i}]}) ${choice_descs[${i}]}"
+			echo -en '\e[0m'
+		else
+			echo "${choices[${i}]}) ${choice_descs[${i}]}"
+		fi;
+	done;
+}
+
 read_interactive() {
 	local prompt="${1}" def="${2}"
 	if ${DEFAULT} && [ -n "${def}" ]; then
@@ -465,14 +484,18 @@ find_branch_rev() {
 			info "Branch not found for '${remote}'. Choose alternative branch:"
 		fi
 		local i=0 def=0 choice
+		# shellcheck disable=SC2034
+		local -a choices choices_descs
+		choices=()
 		for branch in "${branches[@]}"; do
 			nice_branch "${branch}"
-			echo "${i}) ${replies[1]:+${replies[1]}/}${replies[0]}"
+			add_choice "${i}" "${replies[1]:+${replies[1]}/}${replies[0]}"
 			if [ "${GIT_FALLBACK_REMOTE}" == "${replies[1]}/" ]; then
 				def="${i}"
 			fi
 			i=$((i+1))
 		done
+		print_choices "${def}"
 		read_interactive "branch number" "${def}"
 		nice_branch "${branches[${choice}]}"
 		remote="${replies[1]:-refs/heads}/"
@@ -1719,15 +1742,19 @@ apply_to_topic() {
 
 	while [ -z "${topic}" ]; do
 		local i=0 choice default
+		# shellcheck disable=SC2034
+		local -a choices choice_descs
+		choices=()
 		for branch in "${branch_names[@]}"; do
-			echo "${i}) ${branch}"
+			add_choice "${i}" "${branch}"
 			if git log --pretty="format:%s" "${base}..${branches[${i}]}" | grep -q "^${match}$"; then
 				default="${i}"
 			fi
 			i=$((i+1))
 		done
-		echo "s) show patch"
-		echo "x) skip patch"
+		add_choice "s" "show patch"
+		add_choice "x" "skip patch"
+		print_choices "${default}"
 		read_interactive "Branch" "${default}"
 		case "${choice}" in
 		s)
