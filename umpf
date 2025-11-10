@@ -1895,6 +1895,10 @@ do_distribute() {
 
 ### namespace: push ###
 
+push_base() {
+	echo "${content}" > "${STATE}/base-name"
+}
+
 push_topic() {
 	echo "${content}" >> "${STATE}/topic-names"
 }
@@ -1936,6 +1940,7 @@ do_push () {
 	prepare_persistent push "${@}"
 	parse_series push "${STATE}/series"
 
+	local base="$(<"${STATE}/base-name")"
 	local tagname="$(<"${STATE}/tagname")"
 	local tagrevf="$(<"${STATE}/tagrev-flat")"
 
@@ -1992,7 +1997,10 @@ do_push () {
 		args+=("${topics[$topic]}:${topic}")
 	done
 
-	# Push tag again to avoid an error if $args is empty
+	if [ -n "$(${GIT} rev-parse --symbolic-full-name "${base}")" ]; then
+		args+=("${base}")
+	fi
+
 	${GIT} push "${opts[@]}" ${remote} -- "${tagname}" "${args[@]}"
 
 	cleanup
